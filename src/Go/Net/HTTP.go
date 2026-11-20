@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/i-am-the-slime/iris-go/aff"
 )
 
 type Request = *http.Request
@@ -110,23 +112,49 @@ type ClientRequest struct {
 }
 
 func SendImpl[R any](failed func(error) R, received func(ClientResponse) R, outgoing ClientRequest) R {
-	request, err := http.NewRequest(outgoing.Method, outgoing.Url, strings.NewReader(outgoing.Body))
+	answer, err := exchange(outgoing)
 	if err != nil {
 		return failed(err)
+	}
+	return received(answer)
+}
+
+// SendAsyncImpl sends the request on a goroutine of its own and hands the result to finished on
+// the event loop, so other fibers, and the handlers of a server in the same program, keep
+// running meanwhile.
+func SendAsyncImpl[R any](failed func(error) R, received func(ClientResponse) R, outgoing ClientRequest, finished func(R)) {
+	retire := aff.Hold()
+	go func() {
+		answer, err := exchange(outgoing)
+		aff.Exclusive(func() {
+			if err != nil {
+				finished(failed(err))
+			} else {
+				finished(received(answer))
+			}
+		})
+		retire()
+	}()
+}
+
+func exchange(outgoing ClientRequest) (ClientResponse, error) {
+	request, err := http.NewRequest(outgoing.Method, outgoing.Url, strings.NewReader(outgoing.Body))
+	if err != nil {
+		return ClientResponse{}, err
 	}
 	for _, header := range outgoing.Headers {
 		request.Header.Add(header.Name, header.Value)
 	}
 	answer, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return failed(err)
+		return ClientResponse{}, err
 	}
 	defer answer.Body.Close()
 	data, err := io.ReadAll(answer.Body)
 	if err != nil {
-		return failed(err)
+		return ClientResponse{}, err
 	}
-	return received(ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: data})
+	return ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: data}, nil
 }
 
 func StatusImpl(response ClientResponse) int32 { return response.status }

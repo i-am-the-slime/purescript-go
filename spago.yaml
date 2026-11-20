@@ -2,6 +2,7 @@ package:
   name: golang
   description: Bindings to Go's standard library for PureScript compiled to Go with Iris
   dependencies:
+    - aff
     - arrays
     - datetime
     - effect

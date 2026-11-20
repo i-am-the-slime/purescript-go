@@ -26,6 +26,12 @@ spec = describe "Go.Net.HTTP" do
       HTTP.responseBody answer `shouldEqual` "hello gopher"
       HTTP.responseHeader (HeaderName "content-type") answer `shouldEqual` Just (HeaderValue "text/plain")
 
+  it "waits for an answer in Aff without blocking the program" do
+    withServer (pure <<< greet) \url -> do
+      answer <- HTTP.sendAff (HTTP.clientRequest (Method "GET") (url "/hello?name=fiber"))
+        >>= either (liftEffect <<< throw <<< show) pure
+      HTTP.responseBody answer `shouldEqual` "hello fiber"
+
   it "passes the method, headers and body" do
     withServer echo \url -> do
       let

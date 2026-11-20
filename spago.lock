@@ -5,6 +5,7 @@
         "path": "./",
         "core": {
           "dependencies": [
+            "aff",
             "arrays",
             "datetime",
             "effect",

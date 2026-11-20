@@ -32,6 +32,7 @@ module Go.Net.HTTP
   , get
   , clientRequest
   , send
+  , sendAff
   , status
   , responseHeader
   , responseBody
@@ -44,6 +45,7 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, un)
 import Effect (Effect)
+import Effect.Aff (Aff, makeAff, nonCanceler)
 import Go.Bytes (Bytes)
 import Go.Error (GoError)
 
@@ -185,6 +187,11 @@ get url = send (clientRequest (Method "GET") url)
 send :: ClientRequest -> Effect (Either GoError ClientResponse)
 send = sendImpl Left Right
 
+-- | Like `send`, but the fiber waits for the answer without blocking the program: other fibers,
+-- | and the handlers of a server in the same program, run meanwhile.
+sendAff :: ClientRequest -> Aff (Either GoError ClientResponse)
+sendAff request = makeAff \resolve -> sendAsyncImpl Left Right request (resolve <<< Right) $> nonCanceler
+
 status :: ClientResponse -> Status
 status answer = Status (statusImpl answer)
 
@@ -213,6 +220,8 @@ foreign import bodyBytesImpl :: forall r. (GoError -> r) -> (Bytes -> r) -> Requ
 foreign import responseImpl :: Int -> String -> Response
 foreign import responseBytesImpl :: Int -> Bytes -> Response
 foreign import withHeaderImpl :: String -> String -> Response -> Response
+foreign import sendAsyncImpl
+  :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> (r -> Effect Unit) -> Effect Unit
 foreign import sendImpl
   :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> Effect r
 foreign import statusImpl :: ClientResponse -> Int
