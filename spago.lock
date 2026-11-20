@@ -11,10 +11,13 @@
             "effect",
             "either",
             "exceptions",
+            "foldable-traversable",
             "maybe",
             "newtype",
             "partial",
             "prelude",
+            "tailrec",
+            "transformers",
             "tuples"
           ]
         },

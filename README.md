@@ -41,6 +41,7 @@ cd out && go build -o hello . && ./hello
 | `Go.Time` | `time` | Go's time layouts, sleep |
 | `Go.Net.HTTP` | `net/http` | a server and a client |
 | `Go.Error` | | Go's `error` |
+| `Go.IO` | goroutines | Haskell's `IO`: threads, `IORef`, `MVar`, `Chan`, `Async` |
 
 ## Errors are values
 
@@ -121,6 +122,53 @@ HTTP.start (Address ":8080") \_ -> do
 ```
 
 A handler can call another server, even one in the same program, without anything getting stuck.
+
+## Parallel IO
+
+If you know Haskell's `IO`, this is that. `IO` actions run on goroutines, off the event loop,
+so they really run at the same time, on every core:
+
+```purescript
+main :: Effect Unit
+main = launchAff_ do
+  cores <- toAff getNumCapabilities
+  counts <- toAff (mapConcurrently primesBetween chunks)
+  log (show (sum counts) <> " primes below 8000000, counted on " <> show cores <> " cores")
+  where
+  chunks = map (\i -> { from: i * 1_000_000, to: (i + 1) * 1_000_000 }) (Array.range 0 7)
+
+primesBetween :: { from :: Int, to :: Int } -> IO Int
+primesBetween { from, to } = pure unit >>= \_ -> evaluate (Array.length (Array.filter isPrime (Array.range from (to - 1))))
+```
+
+```
+539777 primes below 8000000, counted on 18 cores
+```
+
+That takes 0.47 seconds here, and 0.87 with `GOMAXPROCS=1`.
+
+The names are Haskell's: `forkIO`, `forkFinally`, `threadDelay`, `newIORef`, `atomicModifyIORef'`,
+`newMVar`, `takeMVar`, `putMVar`, `modifyMVar_`, `newChan`, `readChan`, `writeChan`, and from
+`Go.IO.Async`, `async`, `wait`, `concurrently`, `race` and `mapConcurrently`. `throwIO`, `catch`,
+`try`, `bracket` and `finally` work as you'd expect, and `catch` even catches a panic in Go code.
+
+`IO` and the rest of the program meet in two places:
+
+- `toAff` runs an `IO` action from `Aff`. The fiber waits, the event loop doesn't: other fibers and
+  HTTP handlers keep going.
+- `onBaton` runs an `Effect` from inside `IO`, on the event loop. That's how an `IO` thread gets at a
+  `Ref`, `log` or anything else that lives there. There's no `liftEffect`: an `Effect` that ran on a
+  goroutine would race with the event loop.
+
+A few things are different from GHC:
+
+- `threadDelay` takes `Milliseconds`, not microseconds.
+- There's no `killThread`, and `race` doesn't cancel the loser. Go can't stop a goroutine from
+  outside, so the loser runs to its end and its result is dropped.
+- The program doesn't wait for its threads. Wait for them with an `MVar` or `Async`.
+- `unsafePerformEffect` inside `IO` is as unsupported as `unsafePerformIO` is risky in Haskell: the
+  `Effect` runs on whatever goroutine evaluates it, off the event loop.
+- No STM.
 
 ## Go only
 

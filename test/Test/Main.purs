@@ -10,6 +10,7 @@ import Effect.Class (liftEffect)
 import Go.OS (ExitCode(..))
 import Go.OS as OS
 import Test.Go.BytesSpec as BytesSpec
+import Test.Go.IOSpec as IOSpec
 import Test.Go.Net.HTTPSpec as HTTPSpec
 import Test.Go.OS.ExecSpec as ExecSpec
 import Test.Go.OS.StdioSpec as StdioSpec
@@ -24,8 +25,9 @@ import Test.Spec.Summary (successful)
 -- | Runs the specs, unless the specs started this binary as a child to pipe into.
 main :: Effect Unit
 main = do
-  isChild <- StdioSpec.child
-  unless isChild do
+  isStdioChild <- StdioSpec.child
+  isIOChild <- if isStdioChild then pure true else IOSpec.child
+  unless isIOChild do
     launchAff_ do
       results <- un Identity (evalSpecT (defaultConfig { exit = false }) [ consoleReporter ] specs)
       unless (successful results) (liftEffect (OS.exit (ExitCode 1)))
@@ -39,3 +41,4 @@ specs = do
   FilepathSpec.spec
   TimeSpec.spec
   HTTPSpec.spec
+  IOSpec.spec

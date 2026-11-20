@@ -11,8 +11,11 @@ package:
     - maybe
     - newtype
     - partial
-    - tuples
     - prelude
+    - tailrec
+    - transformers
+    - tuples
+    - foldable-traversable
   test:
     main: Test.Main
     dependencies:
