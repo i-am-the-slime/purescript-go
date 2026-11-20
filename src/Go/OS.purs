@@ -3,15 +3,18 @@ module Go.OS
   , FileMode(..)
   , FileInfo
   , DirEntry
-  , ByteCount(..)
   , EnvName(..)
   , EnvValue(..)
   , Arg(..)
   , ExitCode(..)
   , readFile
+  , readFileBytes
   , writeFile
   , writeFileWithMode
   , appendFile
+  , writeFileBytes
+  , writeFileBytesWithMode
+  , appendFileBytes
   , readDir
   , mkdir
   , mkdirAll
@@ -22,6 +25,7 @@ module Go.OS
   , exists
   , mkdirTemp
   , tempDir
+  , executable
   , getwd
   , chdir
   , args
@@ -47,6 +51,7 @@ import Data.Newtype (class Newtype, un)
 import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Exception (throw)
+import Go.Bytes (ByteCount(..), Bytes)
 import Go.Error (GoError)
 import Go.FilePath (FilePath(..))
 import Partial.Unsafe (unsafePartial)
@@ -72,13 +77,6 @@ derive instance Newtype FileMode _
 derive newtype instance Eq FileMode
 derive newtype instance Ord FileMode
 derive newtype instance Show FileMode
-
-newtype ByteCount = ByteCount Number
-
-derive instance Newtype ByteCount _
-derive newtype instance Eq ByteCount
-derive newtype instance Ord ByteCount
-derive newtype instance Show ByteCount
 
 newtype EnvName = EnvName String
 
@@ -114,6 +112,9 @@ foreign import data DirEntry :: Type
 readFile :: FilePath -> Effect (Either FSError String)
 readFile path = readFileImpl failed Right (un FilePath path)
 
+readFileBytes :: FilePath -> Effect (Either FSError Bytes)
+readFileBytes path = readFileBytesImpl failed Right (un FilePath path)
+
 -- | Creates or truncates the file, with mode 0644 for a new one.
 writeFile :: FilePath -> String -> Effect (Either FSError Unit)
 writeFile path = writeFileWithMode path (FileMode 420)
@@ -125,6 +126,18 @@ writeFileWithMode path fileMode contents =
 -- | Appends to the file, creating it with mode 0644 if it does not exist.
 appendFile :: FilePath -> String -> Effect (Either FSError Unit)
 appendFile path contents = appendFileImpl failed (Right unit) (un FilePath path) contents
+
+-- | Creates or truncates the file, with mode 0644 for a new one.
+writeFileBytes :: FilePath -> Bytes -> Effect (Either FSError Unit)
+writeFileBytes path = writeFileBytesWithMode path (FileMode 420)
+
+writeFileBytesWithMode :: FilePath -> FileMode -> Bytes -> Effect (Either FSError Unit)
+writeFileBytesWithMode path fileMode contents =
+  writeFileBytesImpl failed (Right unit) (un FilePath path) (un FileMode fileMode) contents
+
+-- | Appends to the file, creating it with mode 0644 if it does not exist.
+appendFileBytes :: FilePath -> Bytes -> Effect (Either FSError Unit)
+appendFileBytes path contents = appendFileBytesImpl failed (Right unit) (un FilePath path) contents
 
 -- | The directory's entries, sorted by name.
 readDir :: FilePath -> Effect (Either FSError (Array DirEntry))
@@ -162,6 +175,10 @@ mkdirTemp parent prefix = mkdirTempImpl failed (Right <<< FilePath) (un FilePath
 -- | The directory for temporary files, such as `$TMPDIR`.
 tempDir :: Effect FilePath
 tempDir = FilePath <$> tempDirImpl
+
+-- | The path of the running program's own binary.
+executable :: Effect (Either FSError FilePath)
+executable = executableImpl failed (Right <<< FilePath)
 
 getwd :: Effect (Either FSError FilePath)
 getwd = getwdImpl failed (Right <<< FilePath)
@@ -214,6 +231,10 @@ foreign import classifyImpl
   :: forall r. (String -> r) -> (String -> r) -> (String -> r) -> (GoError -> r) -> GoError -> r
 
 foreign import readFileImpl :: forall r. (GoError -> r) -> (String -> r) -> String -> Effect r
+foreign import readFileBytesImpl :: forall r. (GoError -> r) -> (Bytes -> r) -> String -> Effect r
+foreign import writeFileBytesImpl :: forall r. (GoError -> r) -> r -> String -> Int -> Bytes -> Effect r
+foreign import appendFileBytesImpl :: forall r. (GoError -> r) -> r -> String -> Bytes -> Effect r
+foreign import executableImpl :: forall r. (GoError -> r) -> (String -> r) -> Effect r
 foreign import writeFileImpl :: forall r. (GoError -> r) -> r -> String -> Int -> String -> Effect r
 foreign import appendFileImpl :: forall r. (GoError -> r) -> r -> String -> String -> Effect r
 foreign import readDirImpl :: forall r. (GoError -> r) -> (Array DirEntry -> r) -> String -> Effect r

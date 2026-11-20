@@ -33,7 +33,9 @@ cd out && go build -o hello . && ./hello
 | Module | Go package | |
 | --- | --- | --- |
 | `Go.OS` | `os` | files, directories, environment, arguments, exit |
-| `Go.OS.Exec` | `os/exec` | run programs and collect their output |
+| `Go.OS.Stdio` | `os`, `bufio` | standard input, output and error |
+| `Go.OS.Exec` | `os/exec` | run programs, collect their output or hand them the terminal |
+| `Go.Bytes` | `bytes` | `[]byte`, for files and bodies that aren't text |
 | `Go.Path.Filepath` | `path/filepath` | join, split, clean, glob |
 | `Go.Time` | `time` | Go's time layouts, sleep |
 | `Go.Net.HTTP` | `net/http` | a server and a client |
@@ -62,6 +64,46 @@ Exec.run (command (Program "git") [ Arg "status" ]) >>= case _ of
   Left (ProgramNotFound _) -> log "no git"
   Left (StartFailed error) -> log (show error)
 ```
+
+## Standard input and output
+
+`forEachLine` reads standard input a line at a time, as it arrives, so this is `cat -n`:
+
+```purescript
+main :: Effect Unit
+main = do
+  count <- Ref.new 0
+  result <- Stdio.forEachLine \line -> do
+    number <- Ref.modify (_ + 1) count
+    void (Stdio.writeStdout (show number <> " " <> line <> "\n"))
+  either (log <<< show) pure result
+```
+
+Writes aren't buffered, so there's nothing to flush, and they come out in the order you make them,
+mixed with `log` too.
+
+## Running programs
+
+A command inherits your environment. Add variables with `Inherited`, or start from nothing with
+`Only`:
+
+```purescript
+Exec.run ((command (Program "sh") [ Arg "-c", Arg "echo $GREETING" ])
+  { environment = Inherited [ { name: EnvName "GREETING", value: EnvValue "moin" } ] })
+```
+
+For programs that talk to the user, like an editor or `git commit`, `runInteractive` hands them your
+terminal and gives you back their exit code:
+
+```purescript
+Exec.runInteractive (command (Program "vim") [ Arg "notes.md" ])
+```
+
+## Text and bytes
+
+Files and HTTP bodies come as `String` or as `Bytes`. A `String` is UTF-8 text: bytes that aren't valid
+UTF-8 turn into U+FFFD, the replacement character. Want the bytes as they are? Use the `Bytes`
+version: `readFileBytes`, `bodyBytes`, `responseBodyBytes`.
 
 ## HTTP handlers run at the same time
 

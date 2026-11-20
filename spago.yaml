@@ -10,12 +10,14 @@ package:
     - maybe
     - newtype
     - partial
+    - tuples
     - prelude
   test:
     main: Test.Main
     dependencies:
       - aff
       - spec
+      - console
       - now
 workspace:
   packageSet:

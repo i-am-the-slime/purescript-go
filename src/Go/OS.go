@@ -40,6 +40,35 @@ func ReadFileImpl[R any](failed func(error) R, read func(string) R, path string)
 	return read(string(data))
 }
 
+func ReadFileBytesImpl[R any](failed func(error) R, read func([]byte) R, path string) R {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return failed(err)
+	}
+	return read(data)
+}
+
+func WriteFileBytesImpl[R any](failed func(error) R, done R, path string, mode int32, contents []byte) R {
+	return result(failed, done, os.WriteFile(path, contents, fs.FileMode(mode)))
+}
+
+func AppendFileBytesImpl[R any](failed func(error) R, done R, path string, contents []byte) R {
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return failed(err)
+	}
+	_, err = file.Write(contents)
+	return result(failed, done, errors.Join(err, file.Close()))
+}
+
+func ExecutableImpl[R any](failed func(error) R, found func(string) R) R {
+	path, err := os.Executable()
+	if err != nil {
+		return failed(err)
+	}
+	return found(path)
+}
+
 func WriteFileImpl[R any](failed func(error) R, done R, path string, mode int32, contents string) R {
 	return result(failed, done, os.WriteFile(path, []byte(contents), fs.FileMode(mode)))
 }

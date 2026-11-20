@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 )
 
 type Request = *http.Request
@@ -14,7 +15,7 @@ type Request = *http.Request
 type ResponseType struct {
 	status int32
 	header http.Header
-	body   string
+	body   []byte
 }
 
 type Server struct {
@@ -25,7 +26,7 @@ type Server struct {
 type ClientResponse struct {
 	status int32
 	header http.Header
-	body   string
+	body   []byte
 }
 
 func ListenAndServeImpl(address string, handler func(*http.Request) ResponseType) error {
@@ -71,10 +72,22 @@ func BodyImpl[R any](failed func(error) R, read func(string) R, request *http.Re
 	if err != nil {
 		return failed(err)
 	}
-	return read(string(data))
+	return read(text(data))
+}
+
+func BodyBytesImpl[R any](failed func(error) R, read func([]byte) R, request *http.Request) R {
+	data, err := io.ReadAll(request.Body)
+	if err != nil {
+		return failed(err)
+	}
+	return read(data)
 }
 
 func ResponseImpl(status int32, body string) ResponseType {
+	return ResponseType{status: status, header: http.Header{}, body: []byte(body)}
+}
+
+func ResponseBytesImpl(status int32, body []byte) ResponseType {
 	return ResponseType{status: status, header: http.Header{}, body: body}
 }
 
@@ -113,7 +126,7 @@ func SendImpl[R any](failed func(error) R, received func(ClientResponse) R, outg
 	if err != nil {
 		return failed(err)
 	}
-	return received(ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: string(data)})
+	return received(ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: data})
 }
 
 func StatusImpl(response ClientResponse) int32 { return response.status }
@@ -126,7 +139,9 @@ func ResponseHeaderImpl[R any](missing R, found func(string) R, name string, res
 	return found(values[0])
 }
 
-func ResponseBodyImpl(response ClientResponse) string { return response.body }
+func ResponseBodyImpl(response ClientResponse) string { return text(response.body) }
+
+func ResponseBodyBytesImpl(response ClientResponse) []byte { return response.body }
 
 func serve(handler func(*http.Request) ResponseType) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -137,6 +152,21 @@ func serve(handler func(*http.Request) ResponseType) http.Handler {
 			}
 		}
 		writer.WriteHeader(int(response.status))
-		io.WriteString(writer, response.body)
+		writer.Write(response.body)
 	})
+}
+
+// text decodes UTF-8, replacing each byte that is not part of a valid encoding with U+FFFD, as
+// Go.Bytes.toString does.
+func text(data []byte) string {
+	if utf8.Valid(data) {
+		return string(data)
+	}
+	var decoded strings.Builder
+	for len(data) > 0 {
+		character, width := utf8.DecodeRune(data)
+		decoded.WriteRune(character)
+		data = data[width:]
+	}
+	return decoded.String()
 }

@@ -8,8 +8,10 @@ import Data.Maybe (Maybe(..))
 import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
+import Go.Bytes (ByteCount(..))
+import Go.Bytes as Bytes
 import Go.FilePath (FilePath(..))
-import Go.OS (ByteCount(..), EnvName(..), EnvValue(..), FSError(..))
+import Go.OS (EnvName(..), EnvValue(..), FSError(..))
 import Go.OS as OS
 import Go.Path.Filepath as Filepath
 import Test.Spec (Spec, describe, it)
@@ -23,6 +25,18 @@ spec = describe "Go.OS" do
     expectRight =<< liftEffect (OS.writeFile file "hello\n")
     expectRight =<< liftEffect (OS.appendFile file "wörld\n")
     liftEffect (OS.readFile file) >>= shouldEqual' "hello\nwörld\n"
+
+  it "writes, appends and reads bytes" do
+    directory <- scratch
+    let file = Filepath.join [ directory, FilePath "data.bin" ]
+    expectRight =<< liftEffect (OS.writeFileBytes file (Bytes.fromArray [ 0, 255 ]))
+    expectRight =<< liftEffect (OS.appendFileBytes file (Bytes.fromArray [ 7 ]))
+    contents <- expectRight =<< liftEffect (OS.readFileBytes file)
+    Bytes.toArray contents `shouldEqual` [ 0, 255, 7 ]
+
+  it "knows its own binary" do
+    binary <- expectRight =<< liftEffect OS.executable
+    liftEffect (OS.exists binary) >>= shouldEqual true
 
   it "reports a missing file as NotExist with its path" do
     directory <- scratch

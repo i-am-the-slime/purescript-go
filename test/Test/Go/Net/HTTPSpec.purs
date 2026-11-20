@@ -9,6 +9,8 @@ import Effect (Effect)
 import Effect.Aff (Aff, bracket)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
+import Go.Bytes (ByteCount(..))
+import Go.Bytes as Bytes
 import Go.Error (GoError)
 import Go.Net.HTTP (Address(..), ClientResponse, Handler, HeaderName(..), HeaderValue(..), Method(..), Path(..), QueryName(..), Request, Response, Status(..), URL(..))
 import Go.Net.HTTP as HTTP
@@ -33,6 +35,18 @@ spec = describe "Go.Net.HTTP" do
           }
       answer <- fetched (HTTP.send request)
       HTTP.responseBody answer `shouldEqual` "POST /echo secret payload"
+
+  it "serves and fetches bytes that are not UTF-8" do
+    let binary = Bytes.fromArray [ 104, 255, 105 ]
+    withServer (\_ -> pure (HTTP.responseBytes (Status 200) binary)) \url -> do
+      answer <- fetched (HTTP.get (url "/"))
+      HTTP.responseBodyBytes answer `shouldEqual` binary
+      HTTP.responseBody answer `shouldEqual` "h\xFFFDi"
+
+  it "reads a request body as bytes" do
+    withServer (\request -> HTTP.bodyBytes request <#> either (const HTTP.notFound) (HTTP.responseBytes (Status 200) <<< Bytes.slice (ByteCount 0.0) (ByteCount 2.0))) \url -> do
+      answer <- fetched (HTTP.send ((HTTP.clientRequest (Method "POST") (url "/")) { body = "abc" }))
+      HTTP.responseBody answer `shouldEqual` "ab"
 
   it "answers an error status as a response" do
     withServer (pure <<< greet) \url -> do

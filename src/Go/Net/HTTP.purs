@@ -23,7 +23,9 @@ module Go.Net.HTTP
   , query
   , header
   , body
+  , bodyBytes
   , response
+  , responseBytes
   , withHeader
   , ok
   , notFound
@@ -33,6 +35,7 @@ module Go.Net.HTTP
   , status
   , responseHeader
   , responseBody
+  , responseBodyBytes
   ) where
 
 import Prelude
@@ -41,6 +44,7 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, un)
 import Effect (Effect)
+import Go.Bytes (Bytes)
 import Go.Error (GoError)
 
 -- | Where a server listens: `:8080`, or `localhost:0` for any free port.
@@ -151,8 +155,15 @@ header name request = headerImpl Nothing (Just <<< HeaderValue) (un HeaderName n
 body :: Request -> Effect (Either GoError String)
 body request = bodyImpl Left Right request
 
+-- | Reads the whole request body.
+bodyBytes :: Request -> Effect (Either GoError Bytes)
+bodyBytes request = bodyBytesImpl Left Right request
+
 response :: Status -> String -> Response
 response code text = responseImpl (un Status code) text
+
+responseBytes :: Status -> Bytes -> Response
+responseBytes code data_ = responseBytesImpl (un Status code) data_
 
 withHeader :: HeaderName -> HeaderValue -> Response -> Response
 withHeader name value answer = withHeaderImpl (un HeaderName name) (un HeaderValue value) answer
@@ -181,8 +192,12 @@ responseHeader :: HeaderName -> ClientResponse -> Maybe HeaderValue
 responseHeader name answer =
   responseHeaderImpl Nothing (Just <<< HeaderValue) (un HeaderName name) answer
 
+-- | The body as UTF-8 text. Each byte that is not part of valid UTF-8 becomes U+FFFD.
 responseBody :: ClientResponse -> String
 responseBody = responseBodyImpl
+
+responseBodyBytes :: ClientResponse -> Bytes
+responseBodyBytes = responseBodyBytesImpl
 
 foreign import listenAndServeImpl :: String -> (Request -> Effect Response) -> Effect GoError
 foreign import startImpl
@@ -194,10 +209,13 @@ foreign import pathImpl :: Request -> String
 foreign import queryImpl :: forall r. r -> (String -> r) -> String -> Request -> r
 foreign import headerImpl :: forall r. r -> (String -> r) -> String -> Request -> r
 foreign import bodyImpl :: forall r. (GoError -> r) -> (String -> r) -> Request -> Effect r
+foreign import bodyBytesImpl :: forall r. (GoError -> r) -> (Bytes -> r) -> Request -> Effect r
 foreign import responseImpl :: Int -> String -> Response
+foreign import responseBytesImpl :: Int -> Bytes -> Response
 foreign import withHeaderImpl :: String -> String -> Response -> Response
 foreign import sendImpl
   :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> Effect r
 foreign import statusImpl :: ClientResponse -> Int
 foreign import responseHeaderImpl :: forall r. r -> (String -> r) -> String -> ClientResponse -> r
 foreign import responseBodyImpl :: ClientResponse -> String
+foreign import responseBodyBytesImpl :: ClientResponse -> Bytes

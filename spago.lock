@@ -13,12 +13,14 @@
             "maybe",
             "newtype",
             "partial",
-            "prelude"
+            "prelude",
+            "tuples"
           ]
         },
         "test": {
           "dependencies": [
             "aff",
+            "console",
             "now",
             "spec"
           ]
@@ -710,6 +712,15 @@
         "prelude",
         "tuples",
         "unfoldable"
+      ]
+    },
+    "console": {
+      "type": "registry",
+      "version": "6.1.0",
+      "integrity": "sha256-3T5PPz1mATZmV0C4GzkCkpLlCa5xG7u8ZNgnLrrrI1Q=",
+      "dependencies": [
+        "effect",
+        "prelude"
       ]
     },
     "const": {

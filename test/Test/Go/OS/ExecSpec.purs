@@ -8,8 +8,8 @@ import Effect.Aff (Aff)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
 import Go.FilePath (FilePath(..))
-import Go.OS (Arg(..), ExitCode(..))
-import Go.OS.Exec (ExecError(..), Output, Program(..), command)
+import Go.OS (Arg(..), EnvName(..), EnvValue(..), ExitCode(..))
+import Go.OS.Exec (Environment(..), ExecError(..), Output, Program(..), command)
 import Go.OS.Exec as Exec
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (fail, shouldEqual)
@@ -33,6 +33,21 @@ spec = describe "Go.OS.Exec" do
     output <- ran (command (Program "sh") [ Arg "-c", Arg "echo oops >&2; exit 3" ])
     output.stderr `shouldEqual` "oops\n"
     output.exitCode `shouldEqual` ExitCode 3
+
+  it "adds variables to the inherited environment" do
+    let variable = { name: EnvName "GO_EXEC_SPEC", value: EnvValue "added" }
+    output <- ran ((command (Program "sh") [ Arg "-c", Arg "echo $GO_EXEC_SPEC ${PATH:+has-path}" ]) { environment = Inherited [ variable ] })
+    output.stdout `shouldEqual` "added has-path\n"
+
+  it "runs with only the given environment" do
+    let variable = { name: EnvName "GO_EXEC_SPEC", value: EnvValue "alone" }
+    output <- ran ((command (Program "sh") [ Arg "-c", Arg "echo $GO_EXEC_SPEC ${HOME:-no-home}" ]) { environment = Only [ variable ] })
+    output.stdout `shouldEqual` "alone no-home\n"
+
+  it "runs an interactive program and returns its exit code" do
+    liftEffect (Exec.runInteractive (command (Program "sh") [ Arg "-c", Arg "exit 4" ])) >>= case _ of
+      Right code -> code `shouldEqual` ExitCode 4
+      Left error -> fail (show error)
 
   it "reports a program that is not on the PATH" do
     liftEffect (Exec.run (command (Program "no-such-program-anywhere") [])) >>= case _ of
