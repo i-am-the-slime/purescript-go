@@ -92,22 +92,26 @@ func WithHeaderImpl(name string, value string, response ResponseType) ResponseTy
 	return ResponseType{status: response.status, header: header, body: response.body}
 }
 
-func SendImpl[R any](
-	failed func(error) R,
-	received func(ClientResponse) R,
-	method string,
-	url string,
-	names []string,
-	values []string,
-	body string,
-) func() R {
+type Header struct {
+	Name  string
+	Value string
+}
+
+type ClientRequest struct {
+	Method  string
+	Url     string
+	Headers []Header
+	Body    string
+}
+
+func SendImpl[R any](failed func(error) R, received func(ClientResponse) R, outgoing ClientRequest) func() R {
 	return func() R {
-		request, err := http.NewRequest(method, url, strings.NewReader(body))
+		request, err := http.NewRequest(outgoing.Method, outgoing.Url, strings.NewReader(outgoing.Body))
 		if err != nil {
 			return failed(err)
 		}
-		for index, name := range names {
-			request.Header.Add(name, values[index])
+		for _, header := range outgoing.Headers {
+			request.Header.Add(header.Name, header.Value)
 		}
 		answer, err := http.DefaultClient.Do(request)
 		if err != nil {

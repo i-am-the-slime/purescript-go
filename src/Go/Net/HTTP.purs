@@ -11,6 +11,7 @@ module Go.Net.HTTP
   , Response
   , Handler
   , Server
+  , Header
   , ClientRequest
   , ClientResponse
   , listenAndServe
@@ -103,11 +104,13 @@ type Handler = Request -> Effect Response
 -- | A server listening in the background.
 foreign import data Server :: Type
 
+type Header = { name :: HeaderName, value :: HeaderValue }
+
 -- | What `send` sends.
 type ClientRequest =
   { method :: Method
   , url :: URL
-  , headers :: Array { name :: HeaderName, value :: HeaderValue }
+  , headers :: Array Header
   , body :: String
   }
 
@@ -169,13 +172,7 @@ get url = send (clientRequest (Method "GET") url)
 
 -- | Sends the request and reads the whole response. An error status is a response, not an error.
 send :: ClientRequest -> Effect (Either GoError ClientResponse)
-send request =
-  sendImpl Left Right
-    (un Method request.method)
-    (un URL request.url)
-    (map (un HeaderName <<< _.name) request.headers)
-    (map (un HeaderValue <<< _.value) request.headers)
-    request.body
+send = sendImpl Left Right
 
 status :: ClientResponse -> Status
 status answer = Status (statusImpl answer)
@@ -200,15 +197,7 @@ foreign import bodyImpl :: forall r. (GoError -> r) -> (String -> r) -> Request 
 foreign import responseImpl :: Int -> String -> Response
 foreign import withHeaderImpl :: String -> String -> Response -> Response
 foreign import sendImpl
-  :: forall r
-   . (GoError -> r)
-  -> (ClientResponse -> r)
-  -> String
-  -> String
-  -> Array String
-  -> Array String
-  -> String
-  -> Effect r
+  :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> Effect r
 foreign import statusImpl :: ClientResponse -> Int
 foreign import responseHeaderImpl :: forall r. r -> (String -> r) -> String -> ClientResponse -> r
 foreign import responseBodyImpl :: ClientResponse -> String

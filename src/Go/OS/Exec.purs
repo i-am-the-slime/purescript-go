@@ -15,7 +15,7 @@ import Data.Newtype (class Newtype, un)
 import Effect (Effect)
 import Go.Error (GoError)
 import Go.FilePath (FilePath(..))
-import Go.OS (Arg(..), ExitCode(..))
+import Go.OS (Arg(..), ExitCode)
 
 -- | A program to run: a name looked up on the `PATH`, such as `git`, or a path to one.
 newtype Program = Program String
@@ -58,19 +58,17 @@ run { program, args, dir, stdin } =
   runImpl
     (Left <<< ProgramNotFound <<< Program)
     (Left <<< StartFailed)
-    finished
+    Right
     (un Program program)
     (map (un Arg) args)
     (maybe "" (un FilePath) dir)
     stdin
-  where
-  finished stdout stderr exitCode = Right { stdout, stderr, exitCode: ExitCode exitCode }
 
 foreign import runImpl
   :: forall r
    . (String -> r)
   -> (GoError -> r)
-  -> (String -> String -> Int -> r)
+  -> (Output -> r)
   -> String
   -> Array String
   -> String

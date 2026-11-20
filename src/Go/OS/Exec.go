@@ -7,10 +7,16 @@ import (
 	"strings"
 )
 
+type Output struct {
+	Stdout   string
+	Stderr   string
+	ExitCode int32
+}
+
 func RunImpl[R any](
 	notFound func(string) R,
 	failed func(error) R,
-	finished func(string) func(string) func(int) R,
+	finished func(Output) R,
 	program string,
 	args []string,
 	dir string,
@@ -29,10 +35,10 @@ func RunImpl[R any](
 		case errors.Is(err, exec.ErrNotFound):
 			return notFound(program)
 		case errors.As(err, &exitError):
-			return finished(stdout.String())(stderr.String())(exitError.ExitCode())
+			return finished(Output{Stdout: stdout.String(), Stderr: stderr.String(), ExitCode: int32(exitError.ExitCode())})
 		case err != nil:
 			return failed(err)
 		}
-		return finished(stdout.String())(stderr.String())(0)
+		return finished(Output{Stdout: stdout.String(), Stderr: stderr.String()})
 	}
 }
