@@ -14,6 +14,6 @@ func ParseImpl[R any](failed func(error) R, parsed func(float64) R, layout strin
 	return parsed(float64(moment.UnixMilli()))
 }
 
-func SleepImpl(milliseconds float64) func() {
-	return func() { time.Sleep(time.Duration(milliseconds * float64(time.Millisecond))) }
+func SleepImpl(milliseconds float64) {
+	time.Sleep(time.Duration(milliseconds * float64(time.Millisecond)))
 }
