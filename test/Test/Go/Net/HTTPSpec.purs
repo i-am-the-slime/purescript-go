@@ -2,20 +2,25 @@ module Test.Go.Net.HTTPSpec where
 
 import Prelude
 
+import Control.Parallel (parTraverse)
+import Data.Array as Array
+import Data.DateTime.Instant (diff)
 import Data.Either (Either, either, isLeft)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Newtype (un)
-import Effect (Effect)
-import Effect.Aff (Aff, bracket)
+import Data.Time.Duration (Milliseconds(..))
+import Effect.Aff (Aff, bracket, delay)
 import Effect.Class (liftEffect)
 import Effect.Exception (throw)
+import Effect.Now (now)
+import Effect.Ref as Ref
 import Go.Bytes (ByteCount(..))
 import Go.Bytes as Bytes
 import Go.Error (GoError)
-import Go.Net.HTTP (Address(..), ClientResponse, Handler, HeaderName(..), HeaderValue(..), Method(..), Path(..), QueryName(..), Request, Response, Status(..), URL(..))
+import Go.Net.HTTP (Address(..), Handler, HeaderName(..), HeaderValue(..), Method(..), Path(..), QueryName(..), Request, Response, Status(..), URL(..))
 import Go.Net.HTTP as HTTP
 import Test.Spec (Spec, describe, it)
-import Test.Spec.Assertions (shouldEqual)
+import Test.Spec.Assertions (shouldEqual, shouldSatisfy)
 
 spec :: Spec Unit
 spec = describe "Go.Net.HTTP" do
@@ -25,12 +30,6 @@ spec = describe "Go.Net.HTTP" do
       HTTP.status answer `shouldEqual` Status 200
       HTTP.responseBody answer `shouldEqual` "hello gopher"
       HTTP.responseHeader (HeaderName "content-type") answer `shouldEqual` Just (HeaderValue "text/plain")
-
-  it "waits for an answer in Aff without blocking the program" do
-    withServer (pure <<< greet) \url -> do
-      answer <- HTTP.sendAff (HTTP.clientRequest (Method "GET") (url "/hello?name=fiber"))
-        >>= either (liftEffect <<< throw <<< show) pure
-      HTTP.responseBody answer `shouldEqual` "hello fiber"
 
   it "passes the method, headers and body" do
     withServer echo \url -> do
@@ -50,7 +49,7 @@ spec = describe "Go.Net.HTTP" do
       HTTP.responseBody answer `shouldEqual` "h\xFFFDi"
 
   it "reads a request body as bytes" do
-    withServer (\request -> HTTP.bodyBytes request <#> either (const HTTP.notFound) (HTTP.responseBytes (Status 200) <<< Bytes.slice (ByteCount 0.0) (ByteCount 2.0))) \url -> do
+    withServer (\request -> liftEffect (HTTP.bodyBytes request) <#> either (const HTTP.notFound) (HTTP.responseBytes (Status 200) <<< Bytes.slice (ByteCount 0.0) (ByteCount 2.0))) \url -> do
       answer <- fetched (HTTP.send ((HTTP.clientRequest (Method "POST") (url "/")) { body = "abc" }))
       HTTP.responseBody answer `shouldEqual` "ab"
 
@@ -59,9 +58,40 @@ spec = describe "Go.Net.HTTP" do
       answer <- fetched (HTTP.get (url "/missing"))
       HTTP.status answer `shouldEqual` Status 404
 
+  it "answers 500 when a handler fails" do
+    withServer (\_ -> liftEffect (throw "boom")) \url -> do
+      answer <- fetched (HTTP.get (url "/"))
+      HTTP.status answer `shouldEqual` Status 500
+
   it "fails to reach a server that is not there" do
-    unreachable <- liftEffect (HTTP.get (URL "http://127.0.0.1:1/"))
+    unreachable <- HTTP.get (URL "http://127.0.0.1:1/")
     isLeft unreachable `shouldEqual` true
+
+  it "lets handlers that wait share a Ref, and overlap" do
+    count <- liftEffect (Ref.new 0)
+    let
+      counting _ = do
+        before <- liftEffect (Ref.read count)
+        delay (Milliseconds 50.0)
+        liftEffect (Ref.modify_ (_ + 1) count)
+        pure (HTTP.ok (show before))
+    withServer counting \url -> do
+      started <- liftEffect now
+      answers <- parTraverse (\_ -> fetched (HTTP.get (url "/"))) (Array.range 1 20)
+      finished <- liftEffect now
+      map HTTP.status answers `shouldEqual` Array.replicate 20 (Status 200)
+      liftEffect (Ref.read count) >>= (_ `shouldEqual` 20)
+      (diff finished started :: Milliseconds) `shouldSatisfy` (_ < Milliseconds 500.0)
+
+  it "calls another server from inside a handler in the same program" do
+    withServer (pure <<< greet) \inner -> do
+      let
+        proxy _ = do
+          answer <- fetched (HTTP.get (inner "/hello?name=proxy"))
+          pure (HTTP.ok ("via " <> HTTP.responseBody answer))
+      withServer proxy \outer -> do
+        answer <- fetched (HTTP.get (outer "/"))
+        HTTP.responseBody answer `shouldEqual` "via hello proxy"
 
 greet :: Request -> Response
 greet request = case HTTP.path request of
@@ -70,9 +100,9 @@ greet request = case HTTP.path request of
       (HTTP.ok ("hello " <> fromMaybe "stranger" (HTTP.query (QueryName "name") request)))
   _ -> HTTP.notFound
 
-echo :: Request -> Effect Response
+echo :: Handler
 echo request = do
-  text <- HTTP.body request >>= either (throw <<< show) pure
+  text <- liftEffect (HTTP.body request) >>= either (liftEffect <<< throw <<< show) pure
   pure (HTTP.ok (words [ un Method (HTTP.method request), un Path (HTTP.path request), token, text ]))
   where
   token = maybe "" (un HeaderValue) (HTTP.header (HeaderName "x-token") request)
@@ -82,10 +112,10 @@ echo request = do
 
 -- | Runs the test against a server on a free port, given a way to build its URLs.
 withServer :: Handler -> ((String -> URL) -> Aff Unit) -> Aff Unit
-withServer handler test = bracket started (liftEffect <<< HTTP.shutdown) \server ->
+withServer handler test = bracket started HTTP.shutdown \server ->
   test \route -> URL ("http://" <> un Address (HTTP.serverAddress server) <> route)
   where
-  started = fetched (HTTP.start (Address "127.0.0.1:0") handler)
+  started = liftEffect (HTTP.start (Address "127.0.0.1:0") handler) >>= either (liftEffect <<< throw <<< show) pure
 
-fetched :: forall a. Effect (Either GoError a) -> Aff a
-fetched request = liftEffect request >>= either (liftEffect <<< throw <<< show) pure
+fetched :: forall a. Aff (Either GoError a) -> Aff a
+fetched request = request >>= either (liftEffect <<< throw <<< show) pure

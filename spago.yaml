@@ -20,6 +20,8 @@ package:
       - spec
       - console
       - now
+      - parallel
+      - refs
 workspace:
   packageSet:
     registry: 73.2.0

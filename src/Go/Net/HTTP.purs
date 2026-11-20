@@ -32,7 +32,6 @@ module Go.Net.HTTP
   , get
   , clientRequest
   , send
-  , sendAff
   , status
   , responseHeader
   , responseBody
@@ -41,11 +40,12 @@ module Go.Net.HTTP
 
 import Prelude
 
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, un)
 import Effect (Effect)
-import Effect.Aff (Aff, makeAff, nonCanceler)
+import Effect.Aff (Aff, attempt, launchAff_, makeAff, nonCanceler)
+import Effect.Class (liftEffect)
 import Go.Bytes (Bytes)
 import Go.Error (GoError)
 
@@ -104,8 +104,9 @@ foreign import data Request :: Type
 -- | What a handler answers with.
 foreign import data Response :: Type
 
--- | Go serves each request on its own goroutine, so handlers run at the same time.
-type Handler = Request -> Effect Response
+-- | Answers a request. Handlers of different requests take turns: while one waits, say on
+-- | `send` or `delay`, the others run.
+type Handler = Request -> Aff Response
 
 -- | A server listening in the background.
 foreign import data Server :: Type
@@ -124,20 +125,30 @@ type ClientRequest =
 foreign import data ClientResponse :: Type
 
 -- | Serves requests until the server fails, and returns why.
-listenAndServe :: Address -> Handler -> Effect GoError
-listenAndServe address handler = listenAndServeImpl (un Address address) handler
+listenAndServe :: Address -> Handler -> Aff GoError
+listenAndServe address handler =
+  makeAff \stopped -> listenAndServeImpl (un Address address) (answer handler) (stopped <<< Right) $> nonCanceler
 
--- | Starts listening, and serves requests in the background until `shutdown`.
+-- | Starts listening, and serves requests in the background until `shutdown`. Until then, the
+-- | server keeps the program running.
 start :: Address -> Handler -> Effect (Either GoError Server)
-start address handler = startImpl Left Right (un Address address) handler
+start address handler = startImpl Left Right (un Address address) (answer handler)
 
 -- | The address the server listens on, with the port it was given for `:0`.
 serverAddress :: Server -> Address
 serverAddress server = Address (serverAddressImpl server)
 
 -- | Stops listening and waits for the requests in flight.
-shutdown :: Server -> Effect Unit
-shutdown = shutdownImpl
+shutdown :: Server -> Aff Unit
+shutdown server = makeAff \finished -> shutdownImpl server (finished (Right unit)) $> nonCanceler
+
+-- | Runs the handler and hands its response over. A handler that fails answers 500.
+answer :: Handler -> Request -> (Response -> Effect Unit) -> Effect Unit
+answer handler request respond = launchAff_ do
+  result <- attempt (handler request)
+  liftEffect (respond (either (const internalServerError) identity result))
+  where
+  internalServerError = response (Status 500) "500 internal server error\n"
 
 method :: Request -> Method
 method request = Method (methodImpl request)
@@ -180,17 +191,14 @@ notFound = response (Status 404) "404 page not found\n"
 clientRequest :: Method -> URL -> ClientRequest
 clientRequest requestMethod url = { method: requestMethod, url, headers: [], body: "" }
 
-get :: URL -> Effect (Either GoError ClientResponse)
+get :: URL -> Aff (Either GoError ClientResponse)
 get url = send (clientRequest (Method "GET") url)
 
 -- | Sends the request and reads the whole response. An error status is a response, not an error.
-send :: ClientRequest -> Effect (Either GoError ClientResponse)
-send = sendImpl Left Right
-
--- | Like `send`, but the fiber waits for the answer without blocking the program: other fibers,
--- | and the handlers of a server in the same program, run meanwhile.
-sendAff :: ClientRequest -> Aff (Either GoError ClientResponse)
-sendAff request = makeAff \resolve -> sendAsyncImpl Left Right request (resolve <<< Right) $> nonCanceler
+-- | The fiber waits for the answer without blocking the program: other fibers, and the handlers
+-- | of a server in the same program, run meanwhile.
+send :: ClientRequest -> Aff (Either GoError ClientResponse)
+send request = makeAff \resolve -> sendImpl Left Right request (resolve <<< Right) $> nonCanceler
 
 status :: ClientResponse -> Status
 status answer = Status (statusImpl answer)
@@ -206,11 +214,17 @@ responseBody = responseBodyImpl
 responseBodyBytes :: ClientResponse -> Bytes
 responseBodyBytes = responseBodyBytesImpl
 
-foreign import listenAndServeImpl :: String -> (Request -> Effect Response) -> Effect GoError
+foreign import listenAndServeImpl
+  :: String -> (Request -> (Response -> Effect Unit) -> Effect Unit) -> (GoError -> Effect Unit) -> Effect Unit
 foreign import startImpl
-  :: forall r. (GoError -> r) -> (Server -> r) -> String -> (Request -> Effect Response) -> Effect r
+  :: forall r
+   . (GoError -> r)
+  -> (Server -> r)
+  -> String
+  -> (Request -> (Response -> Effect Unit) -> Effect Unit)
+  -> Effect r
 foreign import serverAddressImpl :: Server -> String
-foreign import shutdownImpl :: Server -> Effect Unit
+foreign import shutdownImpl :: Server -> Effect Unit -> Effect Unit
 foreign import methodImpl :: Request -> String
 foreign import pathImpl :: Request -> String
 foreign import queryImpl :: forall r. r -> (String -> r) -> String -> Request -> r
@@ -220,10 +234,8 @@ foreign import bodyBytesImpl :: forall r. (GoError -> r) -> (Bytes -> r) -> Requ
 foreign import responseImpl :: Int -> String -> Response
 foreign import responseBytesImpl :: Int -> Bytes -> Response
 foreign import withHeaderImpl :: String -> String -> Response -> Response
-foreign import sendAsyncImpl
-  :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> (r -> Effect Unit) -> Effect Unit
 foreign import sendImpl
-  :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> Effect r
+  :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> (r -> Effect Unit) -> Effect Unit
 foreign import statusImpl :: ClientResponse -> Int
 foreign import responseHeaderImpl :: forall r. r -> (String -> r) -> String -> ClientResponse -> r
 foreign import responseBodyImpl :: ClientResponse -> String

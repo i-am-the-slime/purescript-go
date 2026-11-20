@@ -10,13 +10,14 @@ import Prelude
 
 import Data.Maybe (fromMaybe)
 import Effect (Effect)
-import Effect.Console (log)
+import Effect.Aff (launchAff_)
+import Effect.Class.Console (log)
 import Go.Error (message)
 import Go.Net.HTTP (Address(..), QueryName(..))
 import Go.Net.HTTP as HTTP
 
 main :: Effect Unit
-main = do
+main = launchAff_ do
   log "listening on :8080"
   failure <- HTTP.listenAndServe (Address ":8080") \request ->
     pure (HTTP.ok ("hello " <> fromMaybe "stranger" (HTTP.query (QueryName "name") request)))
@@ -105,10 +106,21 @@ Files and HTTP bodies come as `String` or as `Bytes`. A `String` is UTF-8 text: 
 UTF-8 turn into U+FFFD, the replacement character. Want the bytes as they are? Use the `Bytes`
 version: `readFileBytes`, `bodyBytes`, `responseBodyBytes`.
 
-## HTTP handlers run at the same time
+## HTTP handlers take turns
 
-Go serves every request on its own goroutine, and so do your handlers. If they share a `Ref`, they share
-it the way Go handlers share a variable.
+A handler is `Request -> Aff Response`, and so is the client: `get` and `send` wait in `Aff`.
+PureScript runs one piece at a time, just like on JavaScript's event loop, so while one handler
+waits for a database, another server or a `delay`, the next request gets going. A `Ref` is safe
+between two waits:
+
+```purescript
+count <- Ref.new 0
+HTTP.start (Address ":8080") \_ -> do
+  visits <- liftEffect (Ref.modify (_ + 1) count)
+  pure (HTTP.ok ("visitor " <> show visits))
+```
+
+A handler can call another server, even one in the same program, without anything getting stuck.
 
 ## Go only
 

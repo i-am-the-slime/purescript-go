@@ -23,6 +23,8 @@
             "aff",
             "console",
             "now",
+            "parallel",
+            "refs",
             "spec"
           ]
         }
