@@ -1,0 +1,21 @@
+package:
+  name: golang
+  description: Bindings to Go's standard library for PureScript compiled to Go with Iris
+  dependencies:
+    - arrays
+    - datetime
+    - effect
+    - either
+    - exceptions
+    - maybe
+    - newtype
+    - partial
+    - prelude
+  test:
+    main: Test.Main
+    dependencies:
+      - aff
+      - spec
+workspace:
+  packageSet:
+    registry: 73.2.0
