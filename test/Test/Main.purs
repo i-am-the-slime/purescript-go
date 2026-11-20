@@ -9,6 +9,7 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Go.OS (ExitCode(..))
 import Go.OS as OS
+import Test.Go.Net.HTTPSpec as HTTPSpec
 import Test.Go.OS.ExecSpec as ExecSpec
 import Test.Go.OSSpec as OSSpec
 import Test.Go.Path.FilepathSpec as FilepathSpec
@@ -29,3 +30,4 @@ specs = do
   ExecSpec.spec
   FilepathSpec.spec
   TimeSpec.spec
+  HTTPSpec.spec

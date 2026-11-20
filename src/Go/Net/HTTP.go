@@ -1,0 +1,148 @@
+package ffi
+
+import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"strings"
+)
+
+type Request = *http.Request
+
+// ResponseType is what a handler answers with. Adding a header copies it.
+type ResponseType struct {
+	status int
+	header http.Header
+	body   string
+}
+
+type Server struct {
+	server   *http.Server
+	listener net.Listener
+}
+
+type ClientResponse struct {
+	status int
+	header http.Header
+	body   string
+}
+
+func ListenAndServeImpl(address string, handler func(*http.Request) func() ResponseType) func() error {
+	return func() error {
+		return http.ListenAndServe(address, serve(handler))
+	}
+}
+
+func StartImpl[R any](failed func(error) R, started func(Server) R, address string, handler func(*http.Request) func() ResponseType) func() R {
+	return func() R {
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			return failed(err)
+		}
+		server := &http.Server{Handler: serve(handler)}
+		go server.Serve(listener)
+		return started(Server{server: server, listener: listener})
+	}
+}
+
+func ServerAddressImpl(server Server) string { return server.listener.Addr().String() }
+
+func ShutdownImpl(server Server) func() {
+	return func() { server.server.Shutdown(context.Background()) }
+}
+
+func MethodImpl(request *http.Request) string { return request.Method }
+
+func PathImpl(request *http.Request) string { return request.URL.Path }
+
+func QueryImpl[R any](missing R, found func(string) R, name string, request *http.Request) R {
+	values, ok := request.URL.Query()[name]
+	if !ok || len(values) == 0 {
+		return missing
+	}
+	return found(values[0])
+}
+
+func HeaderImpl[R any](missing R, found func(string) R, name string, request *http.Request) R {
+	values := request.Header.Values(name)
+	if len(values) == 0 {
+		return missing
+	}
+	return found(values[0])
+}
+
+func BodyImpl[R any](failed func(error) R, read func(string) R, request *http.Request) func() R {
+	return func() R {
+		data, err := io.ReadAll(request.Body)
+		if err != nil {
+			return failed(err)
+		}
+		return read(string(data))
+	}
+}
+
+func ResponseImpl(status int, body string) ResponseType {
+	return ResponseType{status: status, header: http.Header{}, body: body}
+}
+
+func WithHeaderImpl(name string, value string, response ResponseType) ResponseType {
+	header := response.header.Clone()
+	header.Add(name, value)
+	return ResponseType{status: response.status, header: header, body: response.body}
+}
+
+func SendImpl[R any](
+	failed func(error) R,
+	received func(ClientResponse) R,
+	method string,
+	url string,
+	names []string,
+	values []string,
+	body string,
+) func() R {
+	return func() R {
+		request, err := http.NewRequest(method, url, strings.NewReader(body))
+		if err != nil {
+			return failed(err)
+		}
+		for index, name := range names {
+			request.Header.Add(name, values[index])
+		}
+		answer, err := http.DefaultClient.Do(request)
+		if err != nil {
+			return failed(err)
+		}
+		defer answer.Body.Close()
+		data, err := io.ReadAll(answer.Body)
+		if err != nil {
+			return failed(err)
+		}
+		return received(ClientResponse{status: answer.StatusCode, header: answer.Header, body: string(data)})
+	}
+}
+
+func StatusImpl(response ClientResponse) int { return response.status }
+
+func ResponseHeaderImpl[R any](missing R, found func(string) R, name string, response ClientResponse) R {
+	values := response.header.Values(name)
+	if len(values) == 0 {
+		return missing
+	}
+	return found(values[0])
+}
+
+func ResponseBodyImpl(response ClientResponse) string { return response.body }
+
+func serve(handler func(*http.Request) func() ResponseType) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		response := handler(request)()
+		for name, values := range response.header {
+			for _, value := range values {
+				writer.Header().Add(name, value)
+			}
+		}
+		writer.WriteHeader(response.status)
+		io.WriteString(writer, response.body)
+	})
+}
