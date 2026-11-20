@@ -9,8 +9,10 @@ import Effect.Aff (launchAff_)
 import Effect.Class (liftEffect)
 import Go.OS (ExitCode(..))
 import Go.OS as OS
+import Test.Go.OS.ExecSpec as ExecSpec
 import Test.Go.OSSpec as OSSpec
 import Test.Go.Path.FilepathSpec as FilepathSpec
+import Test.Go.TimeSpec as TimeSpec
 import Test.Spec (Spec)
 import Test.Spec.Reporter.Console (consoleReporter)
 import Test.Spec.Runner (defaultConfig, evalSpecT)
@@ -24,4 +26,6 @@ main = launchAff_ do
 specs :: Spec Unit
 specs = do
   OSSpec.spec
+  ExecSpec.spec
   FilepathSpec.spec
+  TimeSpec.spec

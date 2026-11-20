@@ -16,6 +16,7 @@ package:
     dependencies:
       - aff
       - spec
+      - now
 workspace:
   packageSet:
     registry: 73.2.0
