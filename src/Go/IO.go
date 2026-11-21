@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/eventloop"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
@@ -38,20 +38,18 @@ func YieldImpl() { runtime.Gosched() }
 
 func NumCapabilitiesImpl() int32 { return int32(runtime.GOMAXPROCS(0)) }
 
-// ToAffImpl runs the action on a goroutine of its own and hands its outcome to succeeded or failed
-// on the event loop. Until then it keeps the program running. An exception either throws ends the
-// program as an uncaught Go panic: `panic: <message>`, Go's stack, exit status 2.
+// ToAffImpl runs the action on a goroutine of its own and hands its outcome to succeeded or failed,
+// IO actions on that goroutine. Until then it keeps the program running. An exception either
+// throws ends the program as an uncaught Go panic: `panic: <message>`, Go's stack, exit status 2.
 func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.Error)) {
-	retire := aff.Hold()
+	retire := eventloop.Hold()
 	go func() {
 		value, failure, didFail := attempt(action)
-		aff.Exclusive(func() {
-			if didFail {
-				failed(failure)
-			} else {
-				succeeded(value)
-			}
-		})
+		if didFail {
+			failed(failure)
+		} else {
+			succeeded(value)
+		}
 		retire()
 	}()
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/eventloop"
 )
 
 type Output struct {
@@ -82,19 +82,17 @@ func StartImpl[R any](
 	return started(process)
 }
 
-// WaitImpl waits for the program on a goroutine of its own and hands the result to finished on the
-// event loop, so other fibers keep running meanwhile.
+// WaitImpl waits for the program on a goroutine of its own and resumes the fiber with the result,
+// so other fibers keep running meanwhile.
 func WaitImpl[R any](failed func(error) R, ended func(Output) R, process Process, finished func(R)) {
-	retire := aff.Hold()
+	retire := eventloop.Hold()
 	go func() {
 		<-process.done
-		aff.Exclusive(func() {
-			if process.err != nil {
-				finished(failed(process.err))
-			} else {
-				finished(ended(process.output()))
-			}
-		})
+		if process.err != nil {
+			finished(failed(process.err))
+		} else {
+			finished(ended(process.output()))
+		}
 		retire()
 	}()
 }

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/eventloop"
 )
 
 type Request = *http.Request
@@ -36,13 +36,12 @@ type ClientResponse struct {
 	url    string
 }
 
-// ListenAndServeImpl serves in the background and calls stopped with the reason, on the event
-// loop, once the server stops. Until then it keeps the program running.
+// ListenAndServeImpl serves in the background and resumes the fiber with the reason once the
+// server stops. Until then it keeps the program running.
 func ListenAndServeImpl(address string, handler func(*http.Request) func(func(ResponseType)), stopped func(error)) {
-	retire := aff.Hold()
+	retire := eventloop.Hold()
 	go func() {
-		err := http.ListenAndServe(address, serve(handler))
-		aff.Exclusive(func() { stopped(err) })
+		stopped(http.ListenAndServe(address, serve(handler)))
 		retire()
 	}()
 }
@@ -55,7 +54,7 @@ func StartImpl[R any](failed func(error) R, started func(Server) R, address stri
 		return failed(err)
 	}
 	server := &http.Server{Handler: serve(handler)}
-	running := Server{server: server, listener: listener, retire: aff.Hold(), stopped: &sync.Once{}}
+	running := Server{server: server, listener: listener, retire: eventloop.Hold(), stopped: &sync.Once{}}
 	go server.Serve(listener)
 	return started(running)
 }
@@ -63,12 +62,12 @@ func StartImpl[R any](failed func(error) R, started func(Server) R, address stri
 func ServerAddressImpl(server Server) string { return server.listener.Addr().String() }
 
 // ShutdownImpl stops listening, waits for the requests in flight off the event loop, and then
-// calls finished on it.
+// resumes the fiber.
 func ShutdownImpl(server Server, finished func()) {
-	retire := aff.Hold()
+	retire := eventloop.Hold()
 	go func() {
 		server.server.Shutdown(context.Background())
-		aff.Exclusive(finished)
+		finished()
 		server.stopped.Do(server.retire)
 		retire()
 	}()
@@ -136,20 +135,17 @@ type ClientRequest struct {
 	Body    string
 }
 
-// SendImpl sends the request on a goroutine of its own and hands the result to finished on the
-// event loop, so other fibers, and the handlers of a server in the same program, keep running
-// meanwhile.
+// SendImpl sends the request on a goroutine of its own and resumes the fiber with the result, so
+// other fibers, and the handlers of a server in the same program, keep running meanwhile.
 func SendImpl[R any](failed func(error) R, received func(ClientResponse) R, outgoing ClientRequest, finished func(R)) {
-	retire := aff.Hold()
+	retire := eventloop.Hold()
 	go func() {
 		answer, err := exchange(outgoing)
-		aff.Exclusive(func() {
-			if err != nil {
-				finished(failed(err))
-			} else {
-				finished(received(answer))
-			}
-		})
+		if err != nil {
+			finished(failed(err))
+		} else {
+			finished(received(answer))
+		}
 		retire()
 	}()
 }
@@ -205,15 +201,12 @@ func ResponseBodyImpl(response ClientResponse) string { return text(response.bod
 
 func ResponseBodyBytesImpl(response ClientResponse) []byte { return response.body }
 
-// serve runs each request's handler on the event loop: the request goroutine takes its turn
-// with aff.Exclusive, starts the handler, and waits off the loop for the response, so handlers
-// interleave wherever they wait.
+// serve calls the handler, an IO action, on each request's goroutine and waits there for the
+// response.
 func serve(handler func(*http.Request) func(func(ResponseType))) http.Handler {
 	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		answered := make(chan ResponseType, 1)
-		aff.Exclusive(func() {
-			handler(request)(func(response ResponseType) { answered <- response })
-		})
+		handler(request)(func(response ResponseType) { answered <- response })
 		response := <-answered
 		for name, values := range response.header {
 			for _, value := range values {

@@ -3,20 +3,15 @@ package ffi
 import (
 	"fmt"
 
-	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/eventloop"
 	"github.com/i-am-the-slime/iris-go/exception"
 )
 
-// RunEffectImpl runs the effect on the event loop and waits for it; an exception it throws is
-// rethrown on this goroutine.
-func RunEffectImpl[A any](effect func() A) A {
+// LiftEffectImpl waits for the event loop, runs the effect there and returns its result; an
+// exception it throws is rethrown on this goroutine.
+func LiftEffectImpl[A any](effect func() A) A {
 	var value A
-	var failure exception.Error
-	var failed bool
-	aff.Exclusive(func() { value, failure, failed = attempt(effect) })
-	if failed {
-		panic(failure)
-	}
+	eventloop.Turn(func() { value = effect() })
 	return value
 }
 

@@ -190,11 +190,11 @@ the whole throws right away, without waiting for the rest.
 
 - `toAff` runs an `IO` action from `Aff`. The fiber waits, the event loop doesn't: other fibers and
   HTTP handlers keep going.
-- `runEffect`, or `liftEffect`, runs an `Effect` from inside `IO`: it runs it on the program's main
-  event loop and waits for it. That's how an `IO` thread gets at a `Ref`, `log` or anything else
-  that lives there, so `Effect.Class.Console.log` just works in `IO`. Keep these short, no fiber
-  runs while one does. Each trip to the event loop and back costs about 80 ns, so a hot loop
-  keeps its state in an `IORef`, which never leaves the thread's goroutine.
+- `liftEffect` runs an `Effect` from inside `IO`: it waits for the program's main event loop and
+  runs it there. That's how an `IO` thread gets at a `Ref`, `log` or anything else that lives
+  there, so `Effect.Class.Console.log` just works in `IO`. Keep these short, no fiber runs while
+  one does. Each trip to the event loop and back costs about 80 ns, so a hot loop keeps its state
+  in an `IORef`, which never leaves the thread's goroutine.
 - `launchIO_` starts an `IO` action from `Effect`, like `launchAff_` does for `Aff`, and returns
   right away. `launchIO action callback` hands the callback an `Either Error a` on the event loop
   once the action is done.

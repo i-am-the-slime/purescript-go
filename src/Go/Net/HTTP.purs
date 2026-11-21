@@ -50,6 +50,7 @@ import Effect.Aff (Aff, attempt, launchAff_, makeAff, nonCanceler)
 import Effect.Class (liftEffect)
 import Go.Bytes (Bytes)
 import Go.Error (GoError)
+import Go.IO.Internal (IO)
 
 -- | Where a server listens: `:8080`, or `localhost:0` for any free port.
 newtype Address = Address String
@@ -145,12 +146,15 @@ serverAddress server = Address (serverAddressImpl server)
 shutdown :: Server -> Aff Unit
 shutdown server = makeAff \finished -> shutdownImpl server (finished (Right unit)) $> nonCanceler
 
--- | Runs the handler and hands its response over. A handler that fails answers 500.
-answer :: Handler -> Request -> (Response -> Effect Unit) -> Effect Unit
-answer handler request respond = launchAff_ do
-  result <- attempt (handler request)
-  liftEffect (respond (either (const internalServerError) identity result))
+-- | Runs the handler on the event loop and hands its response over. Go calls this on the request's
+-- | goroutine, so it's `IO`. A handler that fails answers 500.
+answer :: Handler -> Request -> (Response -> Effect Unit) -> IO Unit
+answer handler request respond = handled # liftEffect
   where
+  handled = launchAff_ do
+    result <- attempt (handler request)
+    respond (either (const internalServerError) identity result) # liftEffect
+
   internalServerError = response (Status 500) "500 internal server error\n"
 
 method :: Request -> Method
@@ -227,13 +231,13 @@ responseBodyBytes :: ClientResponse -> Bytes
 responseBodyBytes = responseBodyBytesImpl
 
 foreign import listenAndServeImpl
-  :: String -> (Request -> (Response -> Effect Unit) -> Effect Unit) -> (GoError -> Effect Unit) -> Effect Unit
+  :: String -> (Request -> (Response -> Effect Unit) -> IO Unit) -> (GoError -> Effect Unit) -> Effect Unit
 foreign import startImpl
   :: forall r
    . (GoError -> r)
   -> (Server -> r)
   -> String
-  -> (Request -> (Response -> Effect Unit) -> Effect Unit)
+  -> (Request -> (Response -> Effect Unit) -> IO Unit)
   -> Effect r
 foreign import serverAddressImpl :: Server -> String
 foreign import shutdownImpl :: Server -> Effect Unit -> Effect Unit

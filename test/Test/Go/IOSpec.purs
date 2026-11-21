@@ -12,7 +12,7 @@ import Data.Array as Array
 import Data.Array.Partial as ArrayPartial
 import Data.DateTime.Instant (diff)
 import Data.Either (Either(..), either, isLeft)
-import Data.Foldable (sum)
+import Data.Foldable (for_, sum)
 import Data.Int as Int
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
@@ -27,7 +27,7 @@ import Effect.Exception (error, message, throw)
 import Effect.Now (now)
 import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
-import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, runEffect, threadDelay, throwIO, toAff, try)
+import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, threadDelay, throwIO, toAff, try)
 import Go.IO.Async (concurrently, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
 import Go.IO.Chan (newChan, readChan, writeList2Chan)
 import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
@@ -202,10 +202,10 @@ spec = describe "Go.IO" do
       output.exitCode `shouldNotEqual` ExitCode 0
 
   describe "the event loop" do
-    it "lets IO threads use a Ref through runEffect" do
+    it "lets 32 IO threads modify a Ref 1000 times each through liftEffect" do
       ref <- liftEffect (Ref.new 0)
-      toAff (forConcurrently_ (Array.range 1 100) \_ -> runEffect (Ref.modify_ (_ + 1) ref))
-      liftEffect (Ref.read ref) >>= (_ `shouldEqual` 100)
+      toAff (forConcurrently_ (Array.range 1 32) \_ -> for_ (Array.range 1 1000) \_ -> Ref.modify_ (_ + 1) ref # liftEffect)
+      liftEffect (Ref.read ref) >>= (_ `shouldEqual` 32000)
 
     it "lifts an Effect into IO with liftEffect" do
       ref <- liftEffect (Ref.new 0)
@@ -213,7 +213,7 @@ spec = describe "Go.IO" do
       liftEffect (Ref.read ref) >>= (_ `shouldEqual` 55)
 
     it "rethrows an exception of the Effect in IO" do
-      outcome <- toAff (try (runEffect (throw "from the Effect")))
+      outcome <- toAff (try (throw "from the Effect" # liftEffect))
       either message (const "no exception") outcome `shouldEqual` "from the Effect"
 
     it "runs IO from inside an HTTP handler" do

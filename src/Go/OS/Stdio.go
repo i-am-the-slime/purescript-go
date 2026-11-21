@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/i-am-the-slime/iris-go/aff"
+	"github.com/i-am-the-slime/iris-go/eventloop"
 )
 
 // stdin is shared by forEachLine and readChunk, so that neither loses what the other buffered.
@@ -50,21 +50,19 @@ func ForEachLineImpl[R any](failed func(error) R, done R, handle func(string)) R
 	}
 }
 
-// ReadChunkImpl reads on a goroutine of its own and hands the text to finished on the event loop.
+// ReadChunkImpl reads on a goroutine of its own and resumes the fiber with the text.
 func ReadChunkImpl[R any](failed func(error) R, ended R, read func(string) R, finished func(R)) {
-	retire := aff.Hold()
+	retire := eventloop.Hold()
 	go func() {
 		text, err := nextChunk()
-		aff.Exclusive(func() {
-			switch {
-			case text != "":
-				finished(read(text))
-			case errors.Is(err, io.EOF):
-				finished(ended)
-			default:
-				finished(failed(err))
-			}
-		})
+		switch {
+		case text != "":
+			finished(read(text))
+		case errors.Is(err, io.EOF):
+			finished(ended)
+		default:
+			finished(failed(err))
+		}
 		retire()
 	}()
 }
