@@ -5,6 +5,8 @@ module Test.Go.IOSpec
 
 import Prelude
 
+import Control.Parallel (parOneOf, parSequence_, parTraverse, parallel, sequential)
+import Control.Plus (empty)
 import Control.Monad.Rec.Class (Step(..), tailRec, tailRecM)
 import Data.Array as Array
 import Data.Array.Partial as ArrayPartial
@@ -115,6 +117,41 @@ spec = describe "Go.IO" do
     it "races, and returns the first to finish" do
       winner <- toAff (race (threadDelay (Milliseconds 300.0) $> 1) (pure "fast"))
       winner `shouldEqual` Right "fast"
+
+  describe "ParIO" do
+    it "runs both sides of <*> at the same time" do
+      handshake <- toAff do
+        leftReady <- newEmptyMVar
+        rightReady <- newEmptyMVar
+        let left = putMVar leftReady "left" *> takeMVar rightReady
+        let right = putMVar rightReady "right" *> takeMVar leftReady
+        sequential ((/\) <$> parallel left <*> parallel right)
+      handshake `shouldEqual` ("right" /\ "left")
+
+    it "traverses in parallel and keeps the order" do
+      started <- liftEffect now
+      squares <- toAff (parTraverse (\n -> threadDelay (Milliseconds 100.0) $> n * n) (Array.range 1 8))
+      finished <- liftEffect now
+      squares `shouldEqual` map (\n -> n * n) (Array.range 1 8)
+      (diff finished started :: Milliseconds) `shouldSatisfy` (_ < Milliseconds 400.0)
+
+    it "runs every action of parSequence_" do
+      count <- toAff do
+        counter <- newIORef 0
+        parSequence_ (Array.replicate 50 (atomicModifyIORef' counter \n -> (n + 1) /\ unit))
+        readIORef counter
+      count `shouldEqual` 50
+
+    it "returns the first to finish from parOneOf, and empty never wins" do
+      winner <- toAff (parOneOf [ threadDelay (Milliseconds 300.0) $> "slow", pure "fast", sequential empty ])
+      winner `shouldEqual` "fast"
+
+    it "throws as soon as one side throws, without waiting for the other" do
+      started <- liftEffect now
+      outcome <- toAffAttempt (sequential (parallel (threadDelay (Milliseconds 2000.0)) *> parallel (throwIO (error "early") :: IO Unit)))
+      finished <- liftEffect now
+      outcome `shouldEqual` Left "early"
+      (diff finished started :: Milliseconds) `shouldSatisfy` (_ < Milliseconds 1000.0)
 
   describe "exceptions" do
     it "catches what IO throws" do

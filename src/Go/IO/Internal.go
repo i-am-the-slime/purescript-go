@@ -29,6 +29,63 @@ func CatchImpl[A any](handler func(exception.Error) A, action func() A) A {
 	return result
 }
 
+// BothImpl runs both effects on goroutines of their own and combines their results. The first
+// exception either throws is rethrown here, without waiting for the other.
+func BothImpl[A, B, C any](combine func(A) func(B) C, left func() A, right func() B) C {
+	failures := make(chan *exception.Error, 2)
+	var leftValue A
+	var rightValue B
+	go func() {
+		value, failure, failed := attempt(left)
+		leftValue = value
+		failures <- failedWith(failure, failed)
+	}()
+	go func() {
+		value, failure, failed := attempt(right)
+		rightValue = value
+		failures <- failedWith(failure, failed)
+	}()
+	for range 2 {
+		if failure := <-failures; failure != nil {
+			panic(*failure)
+		}
+	}
+	return combine(leftValue)(rightValue)
+}
+
+// FirstImpl runs both effects on goroutines of their own and returns the outcome of the first to
+// finish.
+func FirstImpl[A any](left func() A, right func() A) A {
+	type outcome struct {
+		value   A
+		failure *exception.Error
+	}
+	first := make(chan outcome, 2)
+	for _, effect := range []func() A{left, right} {
+		go func() {
+			value, failure, failed := attempt(effect)
+			first <- outcome{value: value, failure: failedWith(failure, failed)}
+		}()
+	}
+	winner := <-first
+	if winner.failure != nil {
+		panic(*winner.failure)
+	}
+	return winner.value
+}
+
+// NeverImpl waits forever.
+func NeverImpl[A any]() A {
+	select {}
+}
+
+func failedWith(failure exception.Error, failed bool) *exception.Error {
+	if !failed {
+		return nil
+	}
+	return &failure
+}
+
 func attempt[A any](action func() A) (result A, failure exception.Error, failed bool) {
 	defer func() {
 		if recovered := recover(); recovered != nil {

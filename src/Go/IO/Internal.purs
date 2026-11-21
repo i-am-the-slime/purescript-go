@@ -3,6 +3,7 @@
 -- | is only safe for code that touches no Aff, `Ref` or console state; programs use `Go.IO`.
 module Go.IO.Internal
   ( IO(..)
+  , ParIO(..)
   , Boxed(..)
   , unbox
   , runEffect
@@ -10,7 +11,11 @@ module Go.IO.Internal
 
 import Prelude
 
+import Control.Alt (class Alt)
+import Control.Alternative (class Alternative)
 import Control.Monad.Error.Class (class MonadError, class MonadThrow)
+import Control.Parallel.Class (class Parallel)
+import Control.Plus (class Plus)
 import Control.Monad.Rec.Class (class MonadRec)
 import Effect (Effect)
 import Effect.Class (class MonadEffect)
@@ -53,6 +58,45 @@ instance MonadError Error IO where
   catchError (IO action) handler = IO (catchImpl (effect <<< handler) action)
     where
     effect (IO recovered) = recovered
+
+-- | `IO` whose `<*>` runs both sides at the same time, as `ParAff` is for `Aff`. With it,
+-- | `parTraverse`, `parSequence_`, `parOneOf` and the rest of `Control.Parallel` work on `IO`.
+newtype ParIO a = ParIO (IO a)
+
+instance Functor ParIO where
+  map f (ParIO action) = ParIO (map f action)
+
+-- | Runs both sides on threads of their own and waits for both. If one throws, so does the
+-- | whole, as soon as it happens. Go can't stop the other thread: it runs to its end and its
+-- | result is dropped.
+instance Apply ParIO where
+  apply (ParIO (IO functions)) (ParIO (IO values)) =
+    ParIO (IO (unbox <$> bothImpl applyBoxed (Boxed <$> functions) (Boxed <$> values)))
+    where
+    applyBoxed (Boxed f) (Boxed value) = Boxed (f value)
+
+instance Applicative ParIO where
+  pure value = ParIO (pure value)
+
+-- | Runs both sides on threads of their own and returns the first to finish. If that one threw,
+-- | this throws the same. The other keeps running, and its result is dropped.
+instance Alt ParIO where
+  alt (ParIO (IO left)) (ParIO (IO right)) =
+    ParIO (IO (unbox <$> firstImpl (Boxed <$> left) (Boxed <$> right)))
+
+-- | `empty` never finishes, so it never wins a race.
+instance Plus ParIO where
+  empty = ParIO (IO (unbox <$> neverImpl))
+
+instance Alternative ParIO
+
+instance Parallel ParIO IO where
+  parallel = ParIO
+  sequential (ParIO action) = action
+
+foreign import bothImpl :: forall a b c. (a -> b -> c) -> Effect a -> Effect b -> Effect c
+foreign import firstImpl :: forall a. Effect a -> Effect a -> Effect a
+foreign import neverImpl :: forall a. Effect a
 
 foreign import runEffectImpl :: forall a. Effect a -> Effect a
 

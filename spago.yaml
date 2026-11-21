@@ -5,12 +5,14 @@ package:
     - aff
     - arrays
     - bifunctors
+    - control
     - datetime
     - effect
     - either
     - exceptions
     - maybe
     - newtype
+    - parallel
     - partial
     - prelude
     - tailrec

@@ -29,7 +29,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff, nonCanceler)
 import Effect.Exception (Error)
-import Go.IO.Internal (Boxed(..), IO, runEffect, unbox)
+import Go.IO.Internal (Boxed(..), IO, ParIO, runEffect, unbox)
 import Go.IO.Internal as Internal
 
 -- | A thread `forkIO` started.
