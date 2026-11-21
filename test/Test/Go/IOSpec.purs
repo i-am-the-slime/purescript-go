@@ -198,7 +198,7 @@ spec = describe "Go.IO" do
 
     it "ends the program with an exception launchIO_'s action doesn't catch" do
       output <- asChild "launch-crash"
-      output.stderr `shouldSatisfy` String.contains (String.Pattern "launch boom")
+      output.stderr `shouldSatisfy` String.contains (String.Pattern "panic: launch boom")
       output.exitCode `shouldNotEqual` ExitCode 0
 
   describe "the event loop" do

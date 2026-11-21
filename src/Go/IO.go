@@ -24,7 +24,7 @@ func ForkIOImpl(action func()) int32 {
 			return struct{}{}
 		})
 		if failed {
-			fmt.Fprintf(os.Stderr, "%s: thread %d: %s\n", filepath.Base(os.Args[0]), id, exception.Stack(failure))
+			fmt.Fprintf(os.Stderr, "%s: thread %d: %s\n", filepath.Base(os.Args[0]), id, exception.ShowErrorImpl(failure))
 		}
 	}()
 	return id
@@ -40,11 +40,10 @@ func NumCapabilitiesImpl() int32 { return int32(runtime.GOMAXPROCS(0)) }
 
 // ToAffImpl runs the action on a goroutine of its own and hands its outcome to succeeded or failed
 // on the event loop. Until then it keeps the program running. An exception either throws ends the
-// program, as an uncaught one does in JavaScript.
+// program as an uncaught Go panic: `panic: <message>`, Go's stack, exit status 2.
 func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.Error)) {
 	retire := aff.Hold()
 	go func() {
-		defer exception.ReportUncaught()
 		value, failure, didFail := attempt(action)
 		aff.Exclusive(func() {
 			if didFail {
