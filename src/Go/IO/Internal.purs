@@ -7,6 +7,7 @@ module Go.IO.Internal
   , Boxed(..)
   , unbox
   , runEffect
+  , deferIO
   ) where
 
 import Prelude
@@ -55,6 +56,14 @@ instance MonadEffect IO where
 runEffect :: forall a. Effect a -> IO a
 runEffect action = IO (unbox <$> runEffectImpl (Boxed <$> action))
 
+-- | The action that `later unit` builds, built only once it runs. The compiler can't see through
+-- | this, so work that building the action does, such as the argument of a `pure`, happens
+-- | wherever the action runs: on its thread.
+deferIO :: forall a. (Unit -> IO a) -> IO a
+deferIO later = IO (unbox <$> deferImpl (\_ -> Boxed <$> effect (later unit)))
+  where
+  effect (IO action) = action
+
 instance MonadThrow Error IO where
   throwError error = IO (throwException error)
 
@@ -67,6 +76,9 @@ instance MonadError Error IO where
 
 -- | `IO` whose `<*>` runs both sides at the same time, as `ParAff` is for `Aff`. With it,
 -- | `parTraverse`, `parSequence_`, `parOneOf` and the rest of `Control.Parallel` work on `IO`.
+-- | `parTraverse f` applies `f` to every element before it starts a thread, so the pure work of
+-- | `f x` happens up front, one element after another; `Go.IO.Async.mapConcurrently` does it on
+-- | the threads.
 newtype ParIO a = ParIO (IO a)
 
 instance Functor ParIO where
@@ -105,5 +117,7 @@ foreign import firstImpl :: forall a. Effect a -> Effect a -> Effect a
 foreign import neverImpl :: forall a. Effect a
 
 foreign import runEffectImpl :: forall a. Effect a -> Effect a
+
+foreign import deferImpl :: forall a. (Unit -> Effect a) -> Effect a
 
 foreign import catchImpl :: forall a. (Error -> Effect a) -> Effect a -> Effect a

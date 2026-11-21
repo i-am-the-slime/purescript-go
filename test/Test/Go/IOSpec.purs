@@ -28,7 +28,7 @@ import Effect.Now (now)
 import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
 import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, runEffect, threadDelay, throwIO, toAff, try)
-import Go.IO.Async (concurrently, forConcurrently_, mapConcurrently, race, replicateConcurrently)
+import Go.IO.Async (concurrently, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
 import Go.IO.Chan (newChan, readChan, writeList2Chan)
 import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
 import Go.IO.MVar (newEmptyMVar, newMVar, putMVar, takeMVar, withMVar)
@@ -109,6 +109,18 @@ spec = describe "Go.IO" do
       results.both `shouldEqual` ("left" /\ "right")
       results.squares `shouldEqual` map (\n -> n * n) (Array.range 1 9)
       results.copies `shouldEqual` [ 'x', 'x', 'x' ]
+
+    it "works out f x on the threads of mapConcurrently and forConcurrently" do
+      inParallel \items -> do
+        mapped <- toAff (timedIO (mapConcurrently (\n -> pure (spin n)) items))
+        forked <- toAff (timedIO (forConcurrently items \n -> pure (spin n)))
+        pure [ mapped, forked ]
+
+    it "works out f x on the threads of mapConcurrently_ and forConcurrently_" do
+      inParallel \items -> do
+        mapped <- toAff (timedIO (mapConcurrently_ (\n -> pure (spin n)) items))
+        forked <- toAff (timedIO (forConcurrently_ items \n -> pure (spin n)))
+        pure [ mapped, forked ]
 
     it "throws the first exception of its threads" do
       outcome <- toAff (try (mapConcurrently (\n -> if n == 3 then throwIO (error "three") else threadDelay (Milliseconds 500.0) $> n) (Array.range 1 5)))
@@ -223,6 +235,27 @@ spin count = tailRec step (count /\ 0)
 -- | The loop, run when the action runs rather than when it is built.
 spinning :: Int -> IO Int
 spinning count = pure unit >>= \_ -> evaluate (spin count)
+
+-- | Hands as many loop lengths as there are cores (up to 4) to the measurement, and checks that
+-- | each of the times it returns is well below what doing them one after the other would take.
+inParallel :: (Array Int -> Aff (Array Number)) -> Aff Unit
+inParallel measure = do
+  capabilities <- toAff getNumCapabilities
+  let workers = min 4 capabilities
+  if workers < 2 then log "  (one core: nothing to compare)"
+  else do
+    work <- calibrate 1_000_000
+    alone <- timed (toAff (spinning work))
+    times <- measure (Array.replicate workers work)
+    times `shouldSatisfy` Array.all (_ < alone * Int.toNumber workers * 0.6)
+
+-- | How long the action takes, in milliseconds.
+timedIO :: forall a. IO a -> IO Number
+timedIO action = do
+  started <- liftEffect now
+  _ <- action
+  finished <- liftEffect now
+  pure (un Milliseconds (diff finished started))
 
 -- | A loop length that keeps one core busy for at least 150 milliseconds.
 calibrate :: Int -> Aff Int

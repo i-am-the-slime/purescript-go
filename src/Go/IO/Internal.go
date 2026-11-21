@@ -20,6 +20,12 @@ func RunEffectImpl[A any](effect func() A) A {
 	return value
 }
 
+// DeferImpl builds the effect and runs it, so the work of building it happens here, where the
+// effect runs.
+func DeferImpl[A any](later func(struct{}) A) A {
+	return later(struct{}{})
+}
+
 // CatchImpl runs the action and hands whatever it panics with to the handler as an Error.
 func CatchImpl[A any](handler func(exception.Error) A, action func() A) A {
 	result, failure, failed := attempt(action)

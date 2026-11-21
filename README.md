@@ -155,14 +155,17 @@ main = launchAff_ do
   chunks = map (\i -> { from: i * 1_000_000, to: (i + 1) * 1_000_000 }) (Array.range 0 7)
 
 primesBetween :: { from :: Int, to :: Int } -> IO Int
-primesBetween { from, to } = pure unit >>= \_ -> evaluate (Array.length (Array.filter isPrime (Array.range from (to - 1))))
+primesBetween { from, to } = pure (Array.length (Array.filter isPrime (Array.range from (to - 1))))
 ```
 
 ```
 539777 primes below 8000000, counted on 18 cores
 ```
 
-That takes 0.47 seconds here, and 0.87 with `GOMAXPROCS=1`.
+That takes 0.47 seconds here, and 0.87 with `GOMAXPROCS=1`. `mapConcurrently` calls
+`primesBetween` on each chunk's own thread, so the counting happens there, even though `pure`
+gets its argument worked out first. `concurrently` and `race` take actions that are already
+built, so for pure work hand the inputs to `mapConcurrently` or `forConcurrently`.
 
 The names are Haskell's: `forkIO`, `forkFinally`, `threadDelay`, `newIORef`, `atomicModifyIORef'`,
 `newMVar`, `takeMVar`, `putMVar`, `modifyMVar_`, `newChan`, `readChan`, `writeChan`, and from
