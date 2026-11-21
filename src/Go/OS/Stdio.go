@@ -6,7 +6,16 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/i-am-the-slime/iris-go/aff"
 )
+
+// stdin is shared by forEachLine and readChunk, so that neither loses what the other buffered.
+var stdin = bufio.NewReader(os.Stdin)
+
+// pending holds the start of a character that a read split, until the next read completes it.
+var pending []byte
 
 func ReadAllImpl[R any](failed func(error) R, read func(string) R) R {
 	data, err := io.ReadAll(os.Stdin)
@@ -27,9 +36,8 @@ func ReadAllBytesImpl[R any](failed func(error) R, read func([]byte) R) R {
 // ForEachLineImpl reads with ReadString rather than a bufio.Scanner, whose tokens are limited to
 // 64 KiB, so that a line can be any length.
 func ForEachLineImpl[R any](failed func(error) R, done R, handle func(string)) R {
-	reader := bufio.NewReader(os.Stdin)
 	for {
-		line, err := reader.ReadString('\n')
+		line, err := stdin.ReadString('\n')
 		if len(line) > 0 {
 			handle(strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r"))
 		}
@@ -40,6 +48,56 @@ func ForEachLineImpl[R any](failed func(error) R, done R, handle func(string)) R
 			return failed(err)
 		}
 	}
+}
+
+// ReadChunkImpl reads on a goroutine of its own and hands the text to finished on the event loop.
+func ReadChunkImpl[R any](failed func(error) R, ended R, read func(string) R, finished func(R)) {
+	retire := aff.Hold()
+	go func() {
+		text, err := nextChunk()
+		aff.Exclusive(func() {
+			switch {
+			case text != "":
+				finished(read(text))
+			case errors.Is(err, io.EOF):
+				finished(ended)
+			default:
+				finished(failed(err))
+			}
+		})
+		retire()
+	}()
+}
+
+// nextChunk returns the next complete characters of standard input, keeping a split one for later.
+func nextChunk() (string, error) {
+	buffer := make([]byte, 4096)
+	for {
+		count, err := stdin.Read(buffer)
+		data := append(pending, buffer[:count]...)
+		complete := len(data)
+		if err == nil {
+			complete = completeLength(data)
+		}
+		pending = append([]byte(nil), data[complete:]...)
+		if complete > 0 || err != nil {
+			return string(data[:complete]), err
+		}
+	}
+}
+
+// completeLength is the length of the longest prefix of data that does not end inside a character.
+func completeLength(data []byte) int {
+	for back := 1; back <= utf8.UTFMax && back <= len(data); back++ {
+		start := len(data) - back
+		if utf8.RuneStart(data[start]) {
+			if utf8.FullRune(data[start:]) {
+				return len(data)
+			}
+			return start
+		}
+	}
+	return len(data)
 }
 
 func WriteStdoutImpl[R any](failed func(error) R, done R, text string) R {

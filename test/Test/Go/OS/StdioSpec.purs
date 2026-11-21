@@ -9,7 +9,7 @@ import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Effect (Effect)
-import Effect.Aff (Aff)
+import Effect.Aff (Aff, launchAff_)
 import Effect.Class (liftEffect)
 import Effect.Console (log)
 import Effect.Exception (throw)
@@ -42,6 +42,10 @@ spec = describe "Go.OS.Stdio" do
     output.stderr `shouldEqual` "to stderr"
     output.stdout `shouldEqual` ""
 
+  it "reads standard input a piece at a time, whole characters only, until it ends" do
+    output <- asChild "chunks" "größe ✓"
+    output.stdout `shouldEqual` "größe ✓|end"
+
   it "sees a pipe, not a terminal" do
     output <- asChild "terminal" ""
     output.stdout `shouldEqual` "stdin false, stdout false"
@@ -71,6 +75,7 @@ child = OS.lookupEnv childMode >>= case _ of
     stdin <- Stdio.stdinIsTerminal
     stdout <- Stdio.stdoutIsTerminal
     ran (Stdio.writeStdout ("stdin " <> show stdin <> ", stdout " <> show stdout))
+  Just (EnvValue "chunks") -> launchAff_ echoChunks $> true
   Just (EnvValue "order") -> do
     log "a"
     _ <- Stdio.writeStdout "b\n"
@@ -78,3 +83,7 @@ child = OS.lookupEnv childMode >>= case _ of
   _ -> pure false
   where
   ran action = action >>= either (throw <<< show) (const (pure true))
+  echoChunks = Stdio.readChunk >>= case _ of
+    Right (Just text) -> (Stdio.writeStdout text # liftEffect) *> echoChunks
+    Right Nothing -> void (Stdio.writeStdout "|end" # liftEffect)
+    Left error -> throw (show error) # liftEffect

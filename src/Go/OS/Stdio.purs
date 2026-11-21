@@ -2,6 +2,7 @@ module Go.OS.Stdio
   ( readAll
   , readAllBytes
   , forEachLine
+  , readChunk
   , writeStdout
   , writeStdoutBytes
   , writeStderr
@@ -13,7 +14,9 @@ module Go.OS.Stdio
 import Prelude
 
 import Data.Either (Either(..))
+import Data.Maybe (Maybe(..))
 import Effect (Effect)
+import Effect.Aff (Aff, makeAff, nonCanceler)
 import Go.Bytes (Bytes)
 import Go.Error (GoError)
 
@@ -29,6 +32,12 @@ readAllBytes = readAllBytesImpl Left Right
 -- | can be any length.
 forEachLine :: (String -> Effect Unit) -> Effect (Either GoError Unit)
 forEachLine handle = forEachLineImpl Left (Right unit) handle
+
+-- | Waits for the next piece of standard input and returns what arrived, such as a single key
+-- | press when the terminal is in raw mode. `Nothing` means the input has ended. The fiber waits,
+-- | the program doesn't. A character split between two reads comes whole with the second.
+readChunk :: Aff (Either GoError (Maybe String))
+readChunk = makeAff \resolve -> readChunkImpl Left (Right Nothing) (Right <<< Just) (resolve <<< Right) $> nonCanceler
 
 -- | Writes the text to standard output as it is, without adding a newline. Writes aren't
 -- | buffered, so there is nothing to flush, and they interleave with `Effect.Console.log` in
@@ -59,6 +68,8 @@ stdoutIsTerminal = stdoutIsTerminalImpl
 foreign import readAllImpl :: forall r. (GoError -> r) -> (String -> r) -> Effect r
 foreign import readAllBytesImpl :: forall r. (GoError -> r) -> (Bytes -> r) -> Effect r
 foreign import forEachLineImpl :: forall r. (GoError -> r) -> r -> (String -> Effect Unit) -> Effect r
+foreign import readChunkImpl
+  :: forall r. (GoError -> r) -> r -> (String -> r) -> (r -> Effect Unit) -> Effect Unit
 foreign import writeStdoutImpl :: forall r. (GoError -> r) -> r -> String -> Effect r
 foreign import writeStdoutBytesImpl :: forall r. (GoError -> r) -> r -> Bytes -> Effect r
 foreign import writeStderrImpl :: forall r. (GoError -> r) -> r -> String -> Effect r
