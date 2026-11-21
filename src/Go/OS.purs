@@ -22,7 +22,14 @@ module Go.OS
   , removeAll
   , rename
   , stat
+  , lstat
   , exists
+  , copyFile
+  , truncate
+  , symlink
+  , link
+  , readlink
+  , chmod
   , mkdirTemp
   , tempDir
   , executable
@@ -36,6 +43,8 @@ module Go.OS
   , name
   , size
   , isDir
+  , isRegular
+  , isSymlink
   , mode
   , modTime
   , entryName
@@ -165,6 +174,33 @@ rename from to = renameImpl failed (Right unit) (un FilePath from) (un FilePath 
 stat :: FilePath -> Effect (Either FSError FileInfo)
 stat path = statImpl failed Right (un FilePath path)
 
+-- | Like `stat`, but describes a symbolic link itself rather than what it points to.
+lstat :: FilePath -> Effect (Either FSError FileInfo)
+lstat path = lstatImpl failed Right (un FilePath path)
+
+-- | Copies the contents of a file to a new or truncated file, which gets the source's permissions.
+copyFile :: FilePath -> FilePath -> Effect (Either FSError Unit)
+copyFile from to = copyFileImpl failed (Right unit) (un FilePath from) (un FilePath to)
+
+-- | Cuts or extends the file to this many bytes.
+truncate :: FilePath -> ByteCount -> Effect (Either FSError Unit)
+truncate path (ByteCount count) = truncateImpl failed (Right unit) (un FilePath path) count
+
+-- | Creates `path` as a symbolic link to `target`.
+symlink :: FilePath -> FilePath -> Effect (Either FSError Unit)
+symlink target path = symlinkImpl failed (Right unit) (un FilePath target) (un FilePath path)
+
+-- | Creates `path` as a hard link to `existing`.
+link :: FilePath -> FilePath -> Effect (Either FSError Unit)
+link existing path = linkImpl failed (Right unit) (un FilePath existing) (un FilePath path)
+
+-- | Where a symbolic link points, as written in the link.
+readlink :: FilePath -> Effect (Either FSError FilePath)
+readlink path = readlinkImpl failed (Right <<< FilePath) (un FilePath path)
+
+chmod :: FilePath -> FileMode -> Effect (Either FSError Unit)
+chmod path fileMode = chmodImpl failed (Right unit) (un FilePath path) (un FileMode fileMode)
+
 exists :: FilePath -> Effect Boolean
 exists path = isRight <$> stat path
 
@@ -212,6 +248,14 @@ size = ByteCount <<< sizeImpl
 isDir :: FileInfo -> Boolean
 isDir = isDirImpl
 
+-- | Whether it is a plain file: not a directory, link, device, pipe or socket.
+isRegular :: FileInfo -> Boolean
+isRegular = isRegularImpl
+
+-- | Whether it is a symbolic link, which only `lstat` reports.
+isSymlink :: FileInfo -> Boolean
+isSymlink = isSymlinkImpl
+
 mode :: FileInfo -> FileMode
 mode = FileMode <<< modeImpl
 
@@ -243,6 +287,15 @@ foreign import mkdirAllImpl :: forall r. (GoError -> r) -> r -> String -> Effect
 foreign import removeImpl :: forall r. (GoError -> r) -> r -> String -> Effect r
 foreign import removeAllImpl :: forall r. (GoError -> r) -> r -> String -> Effect r
 foreign import renameImpl :: forall r. (GoError -> r) -> r -> String -> String -> Effect r
+foreign import lstatImpl :: forall r. (GoError -> r) -> (FileInfo -> r) -> String -> Effect r
+foreign import copyFileImpl :: forall r. (GoError -> r) -> r -> String -> String -> Effect r
+foreign import truncateImpl :: forall r. (GoError -> r) -> r -> String -> Number -> Effect r
+foreign import symlinkImpl :: forall r. (GoError -> r) -> r -> String -> String -> Effect r
+foreign import linkImpl :: forall r. (GoError -> r) -> r -> String -> String -> Effect r
+foreign import readlinkImpl :: forall r. (GoError -> r) -> (String -> r) -> String -> Effect r
+foreign import chmodImpl :: forall r. (GoError -> r) -> r -> String -> Int -> Effect r
+foreign import isRegularImpl :: FileInfo -> Boolean
+foreign import isSymlinkImpl :: FileInfo -> Boolean
 foreign import statImpl :: forall r. (GoError -> r) -> (FileInfo -> r) -> String -> Effect r
 foreign import mkdirTempImpl :: forall r. (GoError -> r) -> (String -> r) -> String -> String -> Effect r
 foreign import tempDirImpl :: Effect String

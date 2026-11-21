@@ -30,6 +30,14 @@ func AbsImpl[R any](failed func(error) R, found func(string) R, path string) R {
 	return found(absolute)
 }
 
+func EvalSymlinksImpl[R any](failed func(error) R, found func(string) R, path string) R {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return failed(err)
+	}
+	return found(resolved)
+}
+
 func GlobImpl[R any](failed func(error) R, found func([]string) R, pattern string) R {
 	matches, err := filepath.Glob(pattern)
 	if err != nil {

@@ -2,6 +2,7 @@ package ffi
 
 import (
 	"errors"
+	"io"
 	"io/fs"
 	"os"
 )
@@ -117,6 +118,64 @@ func StatImpl[R any](failed func(error) R, found func(fs.FileInfo) R, path strin
 	}
 	return found(info)
 }
+
+func LstatImpl[R any](failed func(error) R, found func(fs.FileInfo) R, path string) R {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return failed(err)
+	}
+	return found(info)
+}
+
+func CopyFileImpl[R any](failed func(error) R, done R, from string, to string) R {
+	return result(failed, done, copyFile(from, to))
+}
+
+func copyFile(from string, to string) error {
+	source, err := os.Open(from)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	info, err := source.Stat()
+	if err != nil {
+		return err
+	}
+	target, err := os.OpenFile(to, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(target, source)
+	return errors.Join(err, target.Close())
+}
+
+func TruncateImpl[R any](failed func(error) R, done R, path string, size float64) R {
+	return result(failed, done, os.Truncate(path, int64(size)))
+}
+
+func SymlinkImpl[R any](failed func(error) R, done R, target string, path string) R {
+	return result(failed, done, os.Symlink(target, path))
+}
+
+func LinkImpl[R any](failed func(error) R, done R, existing string, path string) R {
+	return result(failed, done, os.Link(existing, path))
+}
+
+func ReadlinkImpl[R any](failed func(error) R, found func(string) R, path string) R {
+	target, err := os.Readlink(path)
+	if err != nil {
+		return failed(err)
+	}
+	return found(target)
+}
+
+func ChmodImpl[R any](failed func(error) R, done R, path string, mode int32) R {
+	return result(failed, done, os.Chmod(path, fs.FileMode(mode)))
+}
+
+func IsRegularImpl(info fs.FileInfo) bool { return info.Mode().IsRegular() }
+
+func IsSymlinkImpl(info fs.FileInfo) bool { return info.Mode()&fs.ModeSymlink != 0 }
 
 func MkdirTempImpl[R any](failed func(error) R, created func(string) R, parent string, prefix string) R {
 	path, err := os.MkdirTemp(parent, prefix)

@@ -9,6 +9,7 @@ module Go.Path.Filepath
   , isAbs
   , rel
   , abs
+  , evalSymlinks
   , glob
   ) where
 
@@ -62,6 +63,10 @@ abs :: FilePath -> Effect (Either GoError FilePath)
 abs path = absImpl Left (Right <<< FilePath) (un FilePath path)
 
 -- | The files matching the pattern, sorted.
+-- | The path with every symbolic link in it resolved, like `realpath`. The path must exist.
+evalSymlinks :: FilePath -> Effect (Either GoError FilePath)
+evalSymlinks path = evalSymlinksImpl Left (Right <<< FilePath) (un FilePath path)
+
 glob :: Pattern -> Effect (Either GoError (Array FilePath))
 glob pattern = globImpl Left (Right <<< map FilePath) (un Pattern pattern)
 
@@ -76,4 +81,5 @@ foreign import cleanImpl :: String -> String
 foreign import isAbsImpl :: String -> Boolean
 foreign import relImpl :: forall r. (GoError -> r) -> (String -> r) -> String -> String -> r
 foreign import absImpl :: forall r. (GoError -> r) -> (String -> r) -> String -> Effect r
+foreign import evalSymlinksImpl :: forall r. (GoError -> r) -> (String -> r) -> String -> Effect r
 foreign import globImpl :: forall r. (GoError -> r) -> (Array String -> r) -> String -> Effect r

@@ -11,7 +11,7 @@ import Effect.Exception (throw)
 import Go.Bytes (ByteCount(..))
 import Go.Bytes as Bytes
 import Go.FilePath (FilePath(..))
-import Go.OS (EnvName(..), EnvValue(..), FSError(..))
+import Go.OS (EnvName(..), EnvValue(..), FSError(..), FileMode(..))
 import Go.OS as OS
 import Go.Path.Filepath as Filepath
 import Test.Spec (Spec, describe, it)
@@ -73,6 +73,39 @@ spec = describe "Go.OS" do
     OS.name info `shouldEqual` FilePath "five.txt"
     OS.size info `shouldEqual` ByteCount 5.0
     OS.isDir info `shouldEqual` false
+
+  it "copies, truncates and changes the mode of a file" do
+    directory <- scratch
+    let file = Filepath.join [ directory, FilePath "original.txt" ]
+    let copy = Filepath.join [ directory, FilePath "copy.txt" ]
+    expectRight =<< liftEffect (OS.writeFileWithMode file (FileMode 448) "copied")
+    expectRight =<< liftEffect (OS.copyFile file copy)
+    liftEffect (OS.readFile copy) >>= shouldEqual' "copied"
+    copied <- expectRight =<< liftEffect (OS.stat copy)
+    OS.mode copied `shouldEqual` FileMode 448
+    expectRight =<< liftEffect (OS.truncate copy (ByteCount 4.0))
+    liftEffect (OS.readFile copy) >>= shouldEqual' "copi"
+    expectRight =<< liftEffect (OS.chmod copy (FileMode 384))
+    changed <- expectRight =<< liftEffect (OS.stat copy)
+    OS.mode changed `shouldEqual` FileMode 384
+    OS.isRegular changed `shouldEqual` true
+
+  it "creates and follows symbolic and hard links" do
+    directory <- scratch
+    let file = Filepath.join [ directory, FilePath "target.txt" ]
+    let soft = Filepath.join [ directory, FilePath "soft" ]
+    let hard = Filepath.join [ directory, FilePath "hard" ]
+    expectRight =<< liftEffect (OS.writeFile file "linked")
+    expectRight =<< liftEffect (OS.symlink (FilePath "target.txt") soft)
+    expectRight =<< liftEffect (OS.link file hard)
+    liftEffect (OS.readlink soft) >>= shouldEqual' (FilePath "target.txt")
+    liftEffect (OS.readFile hard) >>= shouldEqual' "linked"
+    linkInfo <- expectRight =<< liftEffect (OS.lstat soft)
+    targetInfo <- expectRight =<< liftEffect (OS.stat soft)
+    OS.isSymlink linkInfo `shouldEqual` true
+    OS.isSymlink targetInfo `shouldEqual` false
+    resolved <- liftEffect (Filepath.evalSymlinks soft) >>= either (liftEffect <<< throw <<< show) pure
+    Filepath.base resolved `shouldEqual` FilePath "target.txt"
 
   it "reads and changes environment variables" do
     let variable = EnvName "GO_OS_SPEC_VARIABLE"
