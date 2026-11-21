@@ -42,7 +42,6 @@ import Data.Traversable (class Traversable)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception (Error)
 import Go.IO (IO, forkFinally, throwIO)
-import Go.IO.Internal (deferIO)
 import Go.IO.MVar (MVar, newEmptyMVar, putMVar, readMVar, tryReadMVar)
 
 -- | An action running on a thread of its own, and its result once it has one.
@@ -99,7 +98,7 @@ forConcurrently_ = flip mapConcurrently_
 -- | `f x` as an action that applies `f` once it runs, on its thread, rather than while the
 -- | actions are being built.
 onItsThread :: forall a b. (a -> IO b) -> a -> IO b
-onItsThread f x = deferIO \_ -> f x
+onItsThread f x = pure unit >>= \_ -> f x
 
 -- | Runs the action that many times at the same time.
 replicateConcurrently :: forall a. Int -> IO a -> IO (Array a)

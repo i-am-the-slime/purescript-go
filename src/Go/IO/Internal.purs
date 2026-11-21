@@ -7,7 +7,6 @@ module Go.IO.Internal
   , Boxed(..)
   , unbox
   , runEffect
-  , deferIO
   ) where
 
 import Prelude
@@ -55,14 +54,6 @@ instance MonadEffect IO where
 -- | which an `IO` thread changes without leaving its goroutine.
 runEffect :: forall a. Effect a -> IO a
 runEffect action = IO (unbox <$> runEffectImpl (Boxed <$> action))
-
--- | The action that `later unit` builds, built only once it runs. The compiler can't see through
--- | this, so work that building the action does, such as the argument of a `pure`, happens
--- | wherever the action runs: on its thread.
-deferIO :: forall a. (Unit -> IO a) -> IO a
-deferIO later = IO (unbox <$> deferImpl (\_ -> Boxed <$> effect (later unit)))
-  where
-  effect (IO action) = action
 
 instance MonadThrow Error IO where
   throwError error = IO (throwException error)
@@ -117,7 +108,5 @@ foreign import firstImpl :: forall a. Effect a -> Effect a -> Effect a
 foreign import neverImpl :: forall a. Effect a
 
 foreign import runEffectImpl :: forall a. Effect a -> Effect a
-
-foreign import deferImpl :: forall a. (Unit -> Effect a) -> Effect a
 
 foreign import catchImpl :: forall a. (Error -> Effect a) -> Effect a -> Effect a
