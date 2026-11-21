@@ -4,6 +4,7 @@ package:
   dependencies:
     - aff
     - arrays
+    - bifunctors
     - datetime
     - effect
     - either

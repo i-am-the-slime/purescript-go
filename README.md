@@ -94,6 +94,23 @@ Exec.run ((command (Program "sh") [ Arg "-c", Arg "echo $GREETING" ])
   { environment = Inherited [ { name: EnvName "GREETING", value: EnvValue "moin" } ] })
 ```
 
+`run` holds up the whole program until the command ends. `runAff` waits in `Aff` instead, so a
+spinner or a server in the same program keeps going:
+
+```purescript
+Exec.runAff (command (Program "sleep") [ Arg "2" ])
+```
+
+Pick where each stream goes with `stdin`, `stdout` and `stderr`. `Parent` passes a stream through to
+your own, `Capture` collects it in the result:
+
+```purescript
+Exec.runAff ((command (Program "gum") [ Arg "choose", Arg "red", Arg "blue" ])
+  { stdin = ParentStdin, stderr = Parent })
+```
+
+`start` gives you the running `Process` to `wait` for or `kill`.
+
 For programs that talk to the user, like an editor or `git commit`, `runInteractive` hands them your
 terminal and gives you back their exit code:
 

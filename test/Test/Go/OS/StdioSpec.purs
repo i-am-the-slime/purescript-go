@@ -17,7 +17,7 @@ import Go.Bytes as Bytes
 import Go.FilePath (FilePath(..))
 import Go.OS (EnvName(..), EnvValue(..), ExitCode(..))
 import Go.OS as OS
-import Go.OS.Exec (Environment(..), Output, Program(..), command)
+import Go.OS.Exec (Environment(..), Output, Program(..), Stdin(..), command)
 import Go.OS.Exec as Exec
 import Go.OS.Stdio as Stdio
 import Test.Spec (Spec, describe, it)
@@ -56,7 +56,7 @@ asChild mode input = liftEffect do
   binary <- OS.executable >>= either (throw <<< show) pure
   let
     runChild = (command (Program (un FilePath binary)) [])
-      { environment = Inherited [ { name: childMode, value: EnvValue mode } ], stdin = input }
+      { environment = Inherited [ { name: childMode, value: EnvValue mode } ], stdin = Text input }
   output <- Exec.run runChild >>= either (throw <<< show) pure
   unless (output.exitCode == ExitCode 0) (throw ("child failed: " <> output.stderr))
   pure output
