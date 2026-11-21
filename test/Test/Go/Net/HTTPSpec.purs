@@ -41,6 +41,14 @@ spec = describe "Go.Net.HTTP" do
       answer <- fetched (HTTP.send request)
       HTTP.responseBody answer `shouldEqual` "POST /echo secret payload"
 
+  it "lists every response header and the URL after redirects" do
+    withServer redirecting \url -> do
+      answer <- fetched (HTTP.get (url "/old"))
+      HTTP.responseBody answer `shouldEqual` "new"
+      un URL (HTTP.responseURL answer) `shouldEqual` un URL (url "/new")
+      Array.filter (\{ name } -> name == HeaderName "X-Two") (HTTP.responseHeaders answer)
+        `shouldEqual` [ { name: HeaderName "X-Two", value: HeaderValue "a" }, { name: HeaderName "X-Two", value: HeaderValue "b" } ]
+
   it "serves and fetches bytes that are not UTF-8" do
     let binary = Bytes.fromArray [ 104, 255, 105 ]
     withServer (\_ -> pure (HTTP.responseBytes (Status 200) binary)) \url -> do
@@ -111,6 +119,11 @@ echo request = do
     _ -> ""
 
 -- | Runs the test against a server on a free port, given a way to build its URLs.
+redirecting :: Handler
+redirecting request = pure case HTTP.path request of
+  Path "/old" -> HTTP.response (Status 302) "" # HTTP.withHeader (HeaderName "Location") (HeaderValue "/new")
+  _ -> HTTP.ok "new" # HTTP.withHeader (HeaderName "X-Two") (HeaderValue "a") # HTTP.withHeader (HeaderName "X-Two") (HeaderValue "b")
+
 withServer :: Handler -> ((String -> URL) -> Aff Unit) -> Aff Unit
 withServer handler test = bracket started HTTP.shutdown \server ->
   test \route -> URL ("http://" <> un Address (HTTP.serverAddress server) <> route)

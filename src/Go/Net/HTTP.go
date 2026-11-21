@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -32,6 +33,7 @@ type ClientResponse struct {
 	status int32
 	header http.Header
 	body   []byte
+	url    string
 }
 
 // ListenAndServeImpl serves in the background and calls stopped with the reason, on the event
@@ -169,7 +171,7 @@ func exchange(outgoing ClientRequest) (ClientResponse, error) {
 	if err != nil {
 		return ClientResponse{}, err
 	}
-	return ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: data}, nil
+	return ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: data, url: answer.Request.URL.String()}, nil
 }
 
 func StatusImpl(response ClientResponse) int32 { return response.status }
@@ -181,6 +183,23 @@ func ResponseHeaderImpl[R any](missing R, found func(string) R, name string, res
 	}
 	return found(values[0])
 }
+
+func ResponseHeadersImpl(response ClientResponse) []Header {
+	names := make([]string, 0, len(response.header))
+	for name := range response.header {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	headers := []Header{}
+	for _, name := range names {
+		for _, value := range response.header[name] {
+			headers = append(headers, Header{Name: name, Value: value})
+		}
+	}
+	return headers
+}
+
+func ResponseURLImpl(response ClientResponse) string { return response.url }
 
 func ResponseBodyImpl(response ClientResponse) string { return text(response.body) }
 

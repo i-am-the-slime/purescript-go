@@ -34,6 +34,8 @@ module Go.Net.HTTP
   , send
   , status
   , responseHeader
+  , responseHeaders
+  , responseURL
   , responseBody
   , responseBodyBytes
   ) where
@@ -85,6 +87,7 @@ derive newtype instance Show Status
 newtype HeaderName = HeaderName String
 
 derive instance Newtype HeaderName _
+derive newtype instance Eq HeaderName
 derive newtype instance Show HeaderName
 
 newtype HeaderValue = HeaderValue String
@@ -207,6 +210,15 @@ responseHeader :: HeaderName -> ClientResponse -> Maybe HeaderValue
 responseHeader name answer =
   responseHeaderImpl Nothing (Just <<< HeaderValue) (un HeaderName name) answer
 
+-- | Every header of the response, in the order Go sorts them, one entry per value. Names are in
+-- | Go's canonical form, such as `Content-Type`.
+responseHeaders :: ClientResponse -> Array Header
+responseHeaders = responseHeadersImpl
+
+-- | Where the response came from, after following redirects.
+responseURL :: ClientResponse -> URL
+responseURL answer = URL (responseURLImpl answer)
+
 -- | The body as UTF-8 text. Each byte that is not part of valid UTF-8 becomes U+FFFD.
 responseBody :: ClientResponse -> String
 responseBody = responseBodyImpl
@@ -238,5 +250,7 @@ foreign import sendImpl
   :: forall r. (GoError -> r) -> (ClientResponse -> r) -> ClientRequest -> (r -> Effect Unit) -> Effect Unit
 foreign import statusImpl :: ClientResponse -> Int
 foreign import responseHeaderImpl :: forall r. r -> (String -> r) -> String -> ClientResponse -> r
+foreign import responseHeadersImpl :: ClientResponse -> Array Header
+foreign import responseURLImpl :: ClientResponse -> String
 foreign import responseBodyImpl :: ClientResponse -> String
 foreign import responseBodyBytesImpl :: ClientResponse -> Bytes
