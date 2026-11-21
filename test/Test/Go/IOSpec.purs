@@ -20,27 +20,27 @@ import Data.String as String
 import Data.Time.Duration (Milliseconds(..))
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
-import Effect.Aff (Aff, launchAff_)
+import Effect.Aff (Aff, launchAff_, makeAff, nonCanceler)
 import Effect.Class (liftEffect)
 import Effect.Class.Console (log)
 import Effect.Exception (error, message, throw)
 import Effect.Now (now)
 import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
-import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, runEffect, threadDelay, throwIO, toAff, try)
+import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, runEffect, threadDelay, throwIO, toAff, try)
 import Go.IO.Async (concurrently, forConcurrently_, mapConcurrently, race, replicateConcurrently)
 import Go.IO.Chan (newChan, readChan, writeList2Chan)
 import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
 import Go.IO.MVar (newEmptyMVar, newMVar, putMVar, takeMVar, withMVar)
 import Go.Net.HTTP (Address(..), Status(..), URL(..))
 import Go.Net.HTTP as HTTP
-import Go.OS (EnvName(..), EnvValue(..))
+import Go.OS (EnvName(..), EnvValue(..), ExitCode(..))
 import Go.OS as OS
 import Go.OS.Exec (Environment(..), Program(..), command)
 import Go.OS.Exec as Exec
 import Partial.Unsafe (unsafePartial)
 import Test.Spec (Spec, describe, it)
-import Test.Spec.Assertions (shouldEqual, shouldSatisfy)
+import Test.Spec.Assertions (shouldEqual, shouldNotEqual, shouldSatisfy)
 
 spec :: Spec Unit
 spec = describe "Go.IO" do
@@ -166,6 +166,29 @@ spec = describe "Go.IO" do
       outcome <- toAffAttempt (throwIO (error "in IO") :: IO Unit)
       outcome `shouldEqual` Left "in IO"
 
+  describe "launchIO" do
+    it "hands the result to the callback" do
+      outcome <- launched (sum <$> mapConcurrently (pure <<< (_ * 2)) (Array.range 1 10))
+      outcome `shouldEqual` Right 110
+
+    it "hands an exception to the callback" do
+      outcome <- launched (throwIO (error "launched") :: IO Unit)
+      outcome `shouldEqual` Left "launched"
+
+    it "returns before the action finishes" do
+      order <- liftEffect do
+        events <- Ref.new []
+        launchIO_ (threadDelay (Milliseconds 50.0) *> liftEffect (Ref.modify_ (_ <> [ "action" ]) events))
+        Ref.modify_ (_ <> [ "returned" ]) events
+        pure events
+      toAff (threadDelay (Milliseconds 200.0))
+      liftEffect (Ref.read order) >>= (_ `shouldEqual` [ "returned", "action" ])
+
+    it "ends the program with an exception launchIO_'s action doesn't catch" do
+      output <- asChild "launch-crash"
+      output.stderr `shouldSatisfy` String.contains (String.Pattern "launch boom")
+      output.exitCode `shouldNotEqual` ExitCode 0
+
   describe "the event loop" do
     it "lets IO threads use a Ref through runEffect" do
       ref <- liftEffect (Ref.new 0)
@@ -231,6 +254,9 @@ traverseIO elements f = tailRecM step (0 /\ [])
     Nothing -> pure (Done acc)
     Just element -> f element <#> \value -> Loop ((index + 1) /\ Array.snoc acc value)
 
+launched :: forall a. IO a -> Aff (Either String a)
+launched action = makeAff \resolve -> launchIO action (resolve <<< Right <<< either (Left <<< message) Right) $> nonCanceler
+
 toAffAttempt :: forall a. IO a -> Aff (Either String a)
 toAffAttempt action = toAff (try action) <#> either (Left <<< message) Right
 
@@ -248,5 +274,8 @@ child :: Effect Boolean
 child = OS.lookupEnv childMode >>= case _ of
   Just (EnvValue "fork-crash") -> do
     launchAff_ (toAff (forkIO (throwIO (error "boom")) *> threadDelay (Milliseconds 100.0)))
+    pure true
+  Just (EnvValue "launch-crash") -> do
+    launchIO_ (throwIO (error "launch boom"))
     pure true
   _ -> pure false

@@ -1,6 +1,6 @@
 -- | Haskell's `IO` for Go: actions that run on goroutines, off the event loop, truly in
--- | parallel. `toAff` runs one from `Aff`, and `runEffect` (or `liftEffect`) runs an `Effect` from
--- | inside one.
+-- | parallel. `toAff` runs one from `Aff`, `launchIO` starts one from `Effect`, and `runEffect` (or
+-- | `liftEffect`) runs an `Effect` from inside one.
 module Go.IO
   ( module Go.IO.Internal
   , ThreadId
@@ -10,6 +10,8 @@ module Go.IO
   , yield
   , getNumCapabilities
   , toAff
+  , launchIO
+  , launchIO_
   , runEffect
   , throwIO
   , catch
@@ -24,11 +26,11 @@ module Go.IO
 import Prelude
 
 import Control.Monad.Error.Class (catchError, throwError)
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff, nonCanceler)
-import Effect.Exception (Error)
+import Effect.Exception (Error, throwException)
 import Go.IO.Internal (Boxed(..), IO, ParIO, runEffect, unbox)
 import Go.IO.Internal as Internal
 
@@ -69,7 +71,18 @@ getNumCapabilities = Internal.IO numCapabilitiesImpl
 -- | and the handlers of a server in the same program, run meanwhile. An exception the action
 -- | throws becomes the fiber's error.
 toAff :: forall a. IO a -> Aff a
-toAff action = makeAff \resolve -> toAffImpl (effect (Boxed <$> action)) (resolve <<< Right <<< unbox) (resolve <<< Left) $> nonCanceler
+toAff action = makeAff \resolve -> launchIO action resolve $> nonCanceler
+
+-- | Starts the action on a thread of its own and returns right away, as `launchAff` does. The
+-- | callback gets its outcome on the event loop once it's done, and until then the program keeps
+-- | running.
+launchIO :: forall a. IO a -> (Either Error a -> Effect Unit) -> Effect Unit
+launchIO action handle = toAffImpl (effect (Boxed <$> action)) (handle <<< Right <<< unbox) (handle <<< Left)
+
+-- | Starts the action on a thread of its own and returns right away, as `launchAff_` does. An
+-- | exception the action doesn't catch is rethrown on the event loop and ends the program.
+launchIO_ :: IO Unit -> Effect Unit
+launchIO_ action = launchIO action (either throwException pure)
 
 throwIO :: forall a. Error -> IO a
 throwIO = throwError

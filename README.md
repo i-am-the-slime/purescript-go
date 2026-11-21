@@ -169,14 +169,32 @@ The names are Haskell's: `forkIO`, `forkFinally`, `threadDelay`, `newIORef`, `at
 `Go.IO.Async`, `async`, `wait`, `concurrently`, `race` and `mapConcurrently`. `throwIO`, `catch`,
 `try`, `bracket` and `finally` work as you'd expect, and `catch` even catches a panic in Go code.
 
-`IO` and the rest of the program meet in two places:
+`ParIO` is to `IO` what `ParAff` is to `Aff`: its `<*>` runs both sides at the same time, so
+everything in `Control.Parallel` works on `IO`:
+
+```purescript
+pages :: Array URL -> IO (Array String)
+pages = parTraverse fetch
+
+fastest :: IO String
+fastest = parOneOf [ fromCache, fromNetwork ]
+```
+
+`parTraverse` keeps the order, and `parOneOf` returns whichever finishes first. If one side throws,
+the whole throws right away, without waiting for the rest.
+
+`IO` and the rest of the program meet in three places:
 
 - `toAff` runs an `IO` action from `Aff`. The fiber waits, the event loop doesn't: other fibers and
   HTTP handlers keep going.
 - `runEffect`, or `liftEffect`, runs an `Effect` from inside `IO`: it runs it on the program's main
   event loop and waits for it. That's how an `IO` thread gets at a `Ref`, `log` or anything else
   that lives there, so `Effect.Class.Console.log` just works in `IO`. Keep these short, no fiber
-  runs while one does.
+  runs while one does. Each trip to the event loop and back costs about 80 ns, so a hot loop
+  keeps its state in an `IORef`, which never leaves the thread's goroutine.
+- `launchIO_` starts an `IO` action from `Effect`, like `launchAff_` does for `Aff`, and returns
+  right away. `launchIO action callback` hands the callback an `Either Error a` on the event loop
+  once the action is done.
 
 A few things are different from GHC:
 

@@ -39,10 +39,12 @@ func YieldImpl() { runtime.Gosched() }
 func NumCapabilitiesImpl() int32 { return int32(runtime.GOMAXPROCS(0)) }
 
 // ToAffImpl runs the action on a goroutine of its own and hands its outcome to succeeded or failed
-// on the event loop. Until then it keeps the program running.
+// on the event loop. Until then it keeps the program running. An exception either throws ends the
+// program, as an uncaught one does in JavaScript.
 func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.Error)) {
 	retire := aff.Hold()
 	go func() {
+		defer exception.ReportUncaught()
 		value, failure, didFail := attempt(action)
 		aff.Exclusive(func() {
 			if didFail {

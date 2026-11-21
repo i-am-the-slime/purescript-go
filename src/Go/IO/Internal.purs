@@ -39,13 +39,19 @@ derive newtype instance Bind IO
 derive newtype instance Monad IO
 derive newtype instance MonadRec IO
 
--- | `liftEffect` is `runEffect`, so `log` and `Ref`s work inside `IO` as they do in `Aff`.
+-- | `liftEffect` is `runEffect`, so `log` and `Ref`s work inside `IO` as they do in `Aff`. Each
+-- | `liftEffect` runs on the program's event loop and costs about 80 ns, so hot loops keep their
+-- | state in an `IORef` instead.
 instance MonadEffect IO where
   liftEffect = runEffect
 
 -- | Runs the `Effect` on the program's main event loop, where `Ref`s, `log` and `Aff` live, and
 -- | waits for it. Keep it short: while it runs, no fiber does. An exception it throws is thrown in
 -- | the `IO` action.
+-- |
+-- | Each call, and so each `liftEffect`, is a trip to the event loop and back, about 80 ns. That's
+-- | nothing next to a `log`, but a lot inside a hot loop: keep state a loop updates in an `IORef`,
+-- | which an `IO` thread changes without leaving its goroutine.
 runEffect :: forall a. Effect a -> IO a
 runEffect action = IO (unbox <$> runEffectImpl (Boxed <$> action))
 
