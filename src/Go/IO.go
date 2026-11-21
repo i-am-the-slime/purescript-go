@@ -55,19 +55,6 @@ func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.
 	}()
 }
 
-// OnBatonImpl runs the effect on the event loop and waits for it; an exception it throws is
-// rethrown on this goroutine.
-func OnBatonImpl[A any](effect func() A) A {
-	var value A
-	var failure exception.Error
-	var failed bool
-	aff.Exclusive(func() { value, failure, failed = attempt(effect) })
-	if failed {
-		panic(failure)
-	}
-	return value
-}
-
 func attempt[A any](action func() A) (result A, failure exception.Error, failed bool) {
 	defer func() {
 		if recovered := recover(); recovered != nil {

@@ -173,9 +173,10 @@ The names are Haskell's: `forkIO`, `forkFinally`, `threadDelay`, `newIORef`, `at
 
 - `toAff` runs an `IO` action from `Aff`. The fiber waits, the event loop doesn't: other fibers and
   HTTP handlers keep going.
-- `onBaton` runs an `Effect` from inside `IO`, on the event loop. That's how an `IO` thread gets at a
-  `Ref`, `log` or anything else that lives there. There's no `liftEffect`: an `Effect` that ran on a
-  goroutine would race with the event loop.
+- `runEffect`, or `liftEffect`, runs an `Effect` from inside `IO`: it runs it on the program's main
+  event loop and waits for it. That's how an `IO` thread gets at a `Ref`, `log` or anything else
+  that lives there, so `Effect.Class.Console.log` just works in `IO`. Keep these short, no fiber
+  runs while one does.
 
 A few things are different from GHC:
 

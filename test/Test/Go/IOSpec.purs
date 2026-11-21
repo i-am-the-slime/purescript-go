@@ -25,7 +25,7 @@ import Effect.Exception (error, message, throw)
 import Effect.Now (now)
 import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
-import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, onBaton, threadDelay, throwIO, toAff, try)
+import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, runEffect, threadDelay, throwIO, toAff, try)
 import Go.IO.Async (concurrently, forConcurrently_, mapConcurrently, race, replicateConcurrently)
 import Go.IO.Chan (newChan, readChan, writeList2Chan)
 import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
@@ -130,10 +130,19 @@ spec = describe "Go.IO" do
       outcome `shouldEqual` Left "in IO"
 
   describe "the event loop" do
-    it "lets IO threads use a Ref through onBaton" do
+    it "lets IO threads use a Ref through runEffect" do
       ref <- liftEffect (Ref.new 0)
-      toAff (forConcurrently_ (Array.range 1 100) \_ -> onBaton (Ref.modify_ (_ + 1) ref))
+      toAff (forConcurrently_ (Array.range 1 100) \_ -> runEffect (Ref.modify_ (_ + 1) ref))
       liftEffect (Ref.read ref) >>= (_ `shouldEqual` 100)
+
+    it "lifts an Effect into IO with liftEffect" do
+      ref <- liftEffect (Ref.new 0)
+      toAff (forConcurrently_ (Array.range 1 10) \n -> liftEffect (Ref.modify_ (_ + n) ref))
+      liftEffect (Ref.read ref) >>= (_ `shouldEqual` 55)
+
+    it "rethrows an exception of the Effect in IO" do
+      outcome <- toAff (try (runEffect (throw "from the Effect")))
+      either message (const "no exception") outcome `shouldEqual` "from the Effect"
 
     it "runs IO from inside an HTTP handler" do
       server <- liftEffect (HTTP.start (Address "127.0.0.1:0") \_ -> HTTP.ok <<< show <$> toAff (sum <$> mapConcurrently (pure <<< (_ * 2)) (Array.range 1 10)))

@@ -5,6 +5,7 @@ module Go.IO.Internal
   ( IO(..)
   , Boxed(..)
   , unbox
+  , runEffect
   ) where
 
 import Prelude
@@ -12,6 +13,7 @@ import Prelude
 import Control.Monad.Error.Class (class MonadError, class MonadThrow)
 import Control.Monad.Rec.Class (class MonadRec)
 import Effect (Effect)
+import Effect.Class (class MonadEffect)
 import Effect.Exception (Error, throwException)
 
 -- | A value on its way through a generic Go function. Go has no type for nothing, so a `Unit`
@@ -32,6 +34,16 @@ derive newtype instance Bind IO
 derive newtype instance Monad IO
 derive newtype instance MonadRec IO
 
+-- | `liftEffect` is `runEffect`, so `log` and `Ref`s work inside `IO` as they do in `Aff`.
+instance MonadEffect IO where
+  liftEffect = runEffect
+
+-- | Runs the `Effect` on the program's main event loop, where `Ref`s, `log` and `Aff` live, and
+-- | waits for it. Keep it short: while it runs, no fiber does. An exception it throws is thrown in
+-- | the `IO` action.
+runEffect :: forall a. Effect a -> IO a
+runEffect action = IO (unbox <$> runEffectImpl (Boxed <$> action))
+
 instance MonadThrow Error IO where
   throwError error = IO (throwException error)
 
@@ -41,5 +53,7 @@ instance MonadError Error IO where
   catchError (IO action) handler = IO (catchImpl (effect <<< handler) action)
     where
     effect (IO recovered) = recovered
+
+foreign import runEffectImpl :: forall a. Effect a -> Effect a
 
 foreign import catchImpl :: forall a. (Error -> Effect a) -> Effect a -> Effect a

@@ -1,5 +1,6 @@
 -- | Haskell's `IO` for Go: actions that run on goroutines, off the event loop, truly in
--- | parallel. `toAff` runs one from `Aff` and `onBaton` runs an `Effect` from inside one.
+-- | parallel. `toAff` runs one from `Aff`, and `runEffect` (or `liftEffect`) runs an `Effect` from
+-- | inside one.
 module Go.IO
   ( module Go.IO.Internal
   , ThreadId
@@ -9,7 +10,7 @@ module Go.IO
   , yield
   , getNumCapabilities
   , toAff
-  , onBaton
+  , runEffect
   , throwIO
   , catch
   , try
@@ -28,7 +29,7 @@ import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff, nonCanceler)
 import Effect.Exception (Error)
-import Go.IO.Internal (Boxed(..), IO, unbox)
+import Go.IO.Internal (Boxed(..), IO, runEffect, unbox)
 import Go.IO.Internal as Internal
 
 -- | A thread `forkIO` started.
@@ -69,11 +70,6 @@ getNumCapabilities = Internal.IO numCapabilitiesImpl
 -- | throws becomes the fiber's error.
 toAff :: forall a. IO a -> Aff a
 toAff action = makeAff \resolve -> toAffImpl (effect (Boxed <$> action)) (resolve <<< Right <<< unbox) (resolve <<< Left) $> nonCanceler
-
--- | Runs the `Effect` on the event loop, where `Ref`s, `log` and Aff live, and waits for it. Keep it
--- | short: while it runs, no fiber does.
-onBaton :: forall a. Effect a -> IO a
-onBaton action = Internal.IO (unbox <$> onBatonImpl (Boxed <$> action))
 
 throwIO :: forall a. Error -> IO a
 throwIO = throwError
@@ -117,4 +113,3 @@ foreign import threadDelayImpl :: Number -> Effect Unit
 foreign import yieldImpl :: Effect Unit
 foreign import numCapabilitiesImpl :: Effect Int
 foreign import toAffImpl :: forall a. Effect a -> (a -> Effect Unit) -> (Error -> Effect Unit) -> Effect Unit
-foreign import onBatonImpl :: forall a. Effect a -> Effect a
