@@ -14,7 +14,7 @@ mkdir -p "$OUT"
   echo
   echo "go 1.27.0"
   echo
-  echo "require github.com/i-am-the-slime/iris-go v0.1.1"
+  echo "require github.com/i-am-the-slime/iris-go v0.2.0"
   if [ -n "${IRIS_GO:-}" ]; then
     echo
     echo "replace github.com/i-am-the-slime/iris-go => $IRIS_GO"
