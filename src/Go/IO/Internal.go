@@ -1,7 +1,7 @@
 package ffi
 
 import (
-	"fmt"
+	"strconv"
 
 	"github.com/i-am-the-slime/iris-go/eventloop"
 	"github.com/i-am-the-slime/iris-go/exception"
@@ -94,8 +94,46 @@ func asError(recovered any) exception.Error {
 	if failure, ok := exception.AsError(recovered); ok {
 		return failure
 	}
-	if err, ok := recovered.(error); ok {
-		return exception.NewError(err.Error())
+	return exception.NewError(panicMessage(recovered))
+}
+
+func panicMessage(recovered any) string {
+	switch value := recovered.(type) {
+	case error:
+		return value.Error()
+	case interface{ String() string }:
+		return value.String()
+	case string:
+		return value
+	case bool:
+		return strconv.FormatBool(value)
+	case int:
+		return strconv.Itoa(value)
+	case int8:
+		return strconv.FormatInt(int64(value), 10)
+	case int16:
+		return strconv.FormatInt(int64(value), 10)
+	case int32:
+		return strconv.FormatInt(int64(value), 10)
+	case int64:
+		return strconv.FormatInt(value, 10)
+	case uint:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(value), 10)
+	case uint64:
+		return strconv.FormatUint(value, 10)
+	case uintptr:
+		return strconv.FormatUint(uint64(value), 10)
+	case float32:
+		return strconv.FormatFloat(float64(value), 'g', -1, 32)
+	case float64:
+		return strconv.FormatFloat(value, 'g', -1, 64)
+	default:
+		return "panic with a value that is not an error, a Stringer, a string or a number"
 	}
-	return exception.NewError(fmt.Sprint(recovered))
 }
