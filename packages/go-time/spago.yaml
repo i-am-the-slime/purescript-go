@@ -1,0 +1,19 @@
+package:
+  name: go-time
+  description: Go's time package for PureScript compiled to Go with Iris
+  dependencies:
+    - datetime
+    - effect
+    - either
+    - go-io
+    - maybe
+    - newtype
+    - partial
+    - prelude
+  publish:
+    version: 0.1.0
+    license: MIT
+    location:
+      githubOwner: i-am-the-slime
+      githubRepo: purescript-go
+      subdir: packages/go-time

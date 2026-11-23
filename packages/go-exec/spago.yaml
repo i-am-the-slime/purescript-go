@@ -1,0 +1,21 @@
+package:
+  name: go-exec
+  description: Go's os/exec package for PureScript compiled to Go with Iris
+  dependencies:
+    - aff
+    - bifunctors
+    - effect
+    - either
+    - go-io
+    - go-os
+    - maybe
+    - newtype
+    - prelude
+    - tuples
+  publish:
+    version: 0.1.0
+    license: MIT
+    location:
+      githubOwner: i-am-the-slime
+      githubRepo: purescript-go
+      subdir: packages/go-exec

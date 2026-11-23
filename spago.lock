@@ -1,13 +1,62 @@
 {
   "workspace": {
     "packages": {
-      "golang": {
-        "path": "./",
+      "go-bytes": {
+        "path": "packages/go-bytes",
+        "core": {
+          "dependencies": [
+            "newtype",
+            "prelude"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
+      "go-exec": {
+        "path": "packages/go-exec",
+        "core": {
+          "dependencies": [
+            "aff",
+            "bifunctors",
+            "effect",
+            "either",
+            "go-io",
+            "go-os",
+            "maybe",
+            "newtype",
+            "prelude",
+            "tuples"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
+      "go-http": {
+        "path": "packages/go-http",
+        "core": {
+          "dependencies": [
+            "aff",
+            "effect",
+            "either",
+            "go-bytes",
+            "go-io",
+            "maybe",
+            "newtype",
+            "prelude"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
+      "go-io": {
+        "path": "packages/go-io",
         "core": {
           "dependencies": [
             "aff",
             "arrays",
-            "bifunctors",
             "control",
             "datetime",
             "effect",
@@ -17,7 +66,6 @@
             "maybe",
             "newtype",
             "parallel",
-            "partial",
             "prelude",
             "tailrec",
             "transformers",
@@ -25,14 +73,84 @@
           ]
         },
         "test": {
+          "dependencies": []
+        }
+      },
+      "go-os": {
+        "path": "packages/go-os",
+        "core": {
           "dependencies": [
             "aff",
+            "datetime",
+            "effect",
+            "either",
+            "exceptions",
+            "go-bytes",
+            "go-io",
+            "maybe",
+            "newtype",
+            "partial",
+            "prelude"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
+      "go-specs": {
+        "path": "specs",
+        "core": {
+          "dependencies": []
+        },
+        "test": {
+          "dependencies": [
+            "aff",
+            "arrays",
             "console",
+            "control",
+            "datetime",
+            "effect",
+            "either",
+            "exceptions",
+            "foldable-traversable",
+            "go-bytes",
+            "go-exec",
+            "go-http",
+            "go-io",
+            "go-os",
+            "go-time",
+            "identity",
+            "integers",
+            "maybe",
+            "newtype",
             "now",
             "parallel",
+            "partial",
+            "prelude",
             "refs",
-            "spec"
+            "spec",
+            "strings",
+            "tailrec",
+            "tuples"
           ]
+        }
+      },
+      "go-time": {
+        "path": "packages/go-time",
+        "core": {
+          "dependencies": [
+            "datetime",
+            "effect",
+            "either",
+            "go-io",
+            "maybe",
+            "newtype",
+            "partial",
+            "prelude"
+          ]
+        },
+        "test": {
+          "dependencies": []
         }
       }
     },

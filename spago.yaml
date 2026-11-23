@@ -1,33 +1,3 @@
-package:
-  name: golang
-  description: Bindings to Go's standard library for PureScript compiled to Go with Iris
-  dependencies:
-    - aff
-    - arrays
-    - bifunctors
-    - control
-    - datetime
-    - effect
-    - either
-    - exceptions
-    - maybe
-    - newtype
-    - parallel
-    - partial
-    - prelude
-    - tailrec
-    - transformers
-    - tuples
-    - foldable-traversable
-  test:
-    main: Test.Main
-    dependencies:
-      - aff
-      - spec
-      - console
-      - now
-      - parallel
-      - refs
 workspace:
   packageSet:
     registry: 73.2.0

@@ -1,0 +1,35 @@
+package:
+  name: go-specs
+  description: Specs for every purescript-go package
+  dependencies: []
+  test:
+    main: Test.Main
+    dependencies:
+      - aff
+      - arrays
+      - console
+      - control
+      - datetime
+      - effect
+      - either
+      - exceptions
+      - foldable-traversable
+      - go-bytes
+      - go-exec
+      - go-http
+      - go-io
+      - go-os
+      - go-time
+      - identity
+      - integers
+      - maybe
+      - newtype
+      - now
+      - parallel
+      - partial
+      - prelude
+      - refs
+      - spec
+      - strings
+      - tailrec
+      - tuples

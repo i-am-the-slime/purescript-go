@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compiles the specs to Go with Iris and runs them.
+# Compiles the specs of every package to Go with Iris and runs them.
 #
 #   ./test.sh
 #
@@ -10,7 +10,7 @@ IRIS="${IRIS:-iris}"
 OUT="$HERE/out"
 mkdir -p "$OUT"
 {
-  echo "module example.com/golang-test"
+  echo "module example.com/go-specs"
   echo
   echo "go 1.27.0"
   echo
@@ -20,6 +20,6 @@ mkdir -p "$OUT"
     echo "replace github.com/i-am-the-slime/iris-go => $IRIS_GO"
   fi
 } >"$OUT/go.mod"
-(cd "$HERE" && "$IRIS" go --entry Test.Main.main "$OUT")
+(cd "$HERE" && "$IRIS" go --package go-specs --entry Test.Main.main "$OUT")
 (cd "$OUT" && go build -o spec-runner .)
 "$OUT/spec-runner"

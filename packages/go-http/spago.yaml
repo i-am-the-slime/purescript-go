@@ -1,0 +1,19 @@
+package:
+  name: go-http
+  description: Go's net/http server and client for PureScript compiled to Go with Iris
+  dependencies:
+    - aff
+    - effect
+    - either
+    - go-bytes
+    - go-io
+    - maybe
+    - newtype
+    - prelude
+  publish:
+    version: 0.1.0
+    license: MIT
+    location:
+      githubOwner: i-am-the-slime
+      githubRepo: purescript-go
+      subdir: packages/go-http
