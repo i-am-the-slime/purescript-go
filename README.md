@@ -1,6 +1,6 @@
 # purescript-go
 
-Go's standard library for PureScript. Compile with [Iris](https://github.com/i-am-the-slime/purescript-analyzer/tree/iris-go)
+Go's standard library for PureScript. Compile with [Iris](https://github.com/i-am-the-slime/iris-go-backend)
 and you get a single native binary that reads files, runs programs, serves HTTP and uses every core
 you've got.
 
@@ -47,10 +47,10 @@ Take what you need, each one brings along the ones it builds on.
 
 ## Installing
 
-You need Iris with the Go backend, and Go 1.27 or later:
+You need Iris with the Go backend, Go 1.27 or later, and Spago:
 
 ```bash
-brew install i-am-the-slime/tap/iris
+brew install spago i-am-the-slime/tap/iris
 ```
 
 The packages aren't in the registry yet, so add them to your `spago.yaml` straight from GitHub. Pick a
@@ -142,7 +142,9 @@ The names are Haskell's: `forkIO`, `forkFinally`, `threadDelay`, `newIORef`, `at
 
 An `Effect.Ref` isn't safe between parallel `IO` threads. Two threads that `modify` the same `Ref`
 at once can lose an update. Use an `MVar` (`modifyMVar_`, `withMVar`) or an `IORef` with
-`atomicModifyIORef'` instead: those are atomic, however many threads hit them.
+`atomicModifyIORef'` instead: those are atomic, however many threads hit them. Iris's
+[Effect, Aff and IO](https://github.com/i-am-the-slime/iris-go-backend/blob/main/documentation/go/effects.md)
+guide has the details.
 
 ### ParIO
 
@@ -166,11 +168,13 @@ the whole throws right away, without waiting for the rest.
 
 - `toAff` runs an `IO` action from `Aff`. The fiber waits, the event loop doesn't: other fibers and
   HTTP handlers keep going.
-- `liftEffect` runs an `Effect` from inside `IO`: it waits for the program's main event loop and
-  runs it there. That's how an `IO` thread gets at `log` or anything else that lives there, so
-  `Effect.Class.Console.log` just works in `IO`. Keep these short, no fiber runs while one does.
-  Each trip to the event loop and back costs about 80 ns, so a hot loop keeps its state in an
-  `IORef`, which never leaves the thread's goroutine.
+- `liftEffect` runs an `Effect` from inside `IO`, so `Effect.Class.Console.log` just works in `IO`.
+  In a program that uses `Aff` anywhere (`launchAff_`, an `AVar`, a `Promise`, also inside a
+  library), it waits for the program's main event loop and runs the `Effect` there, where the
+  fibers live. Keep these short, no fiber runs while one does. Each trip to the event loop and back
+  costs about 80 ns, so a hot loop keeps its state in an `IORef`, which never leaves the thread's
+  goroutine. Without any `Aff` there are no fibers to wait for, and `liftEffect` runs the `Effect`
+  right there on the thread, at the same time as the others.
 - `launchIO_` starts an `IO` action from `Effect`, like `launchAff_` does for `Aff`, and returns
   right away. `launchIO action callback` hands the callback an `Either Error a` on the event loop
   once the action is done.
