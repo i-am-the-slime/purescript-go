@@ -185,6 +185,13 @@ spec = describe "Go.IO" do
       caught <- toAff (throwIO (error "thrown") `catch` (pure <<< message))
       caught `shouldEqual` "thrown"
 
+    it "catches what an IO Unit throws" do
+      caught <- toAff do
+        seen <- newIORef ""
+        throwIO (error "thrown") `catch` (writeIORef seen <<< message)
+        readIORef seen
+      caught `shouldEqual` "thrown"
+
     it "catches a panic in Go code" do
       outcome <- toAff (try (pure unit >>= \_ -> evaluate (unsafePartial (ArrayPartial.head ([] :: Array Int)))))
       isLeft outcome `shouldEqual` true

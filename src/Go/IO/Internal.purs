@@ -61,7 +61,7 @@ instance MonadThrow Error IO where
 -- | Catches anything the action throws: a PureScript `Error`, or a panic in Go foreign code, which
 -- | arrives as an `Error` with the panic's message.
 instance MonadError Error IO where
-  catchError action handler = IO (catchImpl handler action)
+  catchError action handler = IO (unbox <$> catchImpl (map Boxed <<< handler) (Boxed <$> action))
 
 foreign import catchImpl :: forall a. (Error -> IO a) -> IO a -> Effect a
 
