@@ -31,7 +31,7 @@ import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchI
 import Go.IO.Async (concurrently, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
 import Go.IO.Chan (newChan, readChan, writeList2Chan)
 import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
-import Go.IO.MVar (newEmptyMVar, newMVar, putMVar, takeMVar, withMVar)
+import Go.IO.MVar (modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar, withMVar)
 import Go.Net.HTTP (Address(..), Status(..), URL(..))
 import Go.Net.HTTP as HTTP
 import Go.OS (EnvName(..), EnvValue(..), ExitCode(..))
@@ -83,6 +83,21 @@ spec = describe "Go.IO" do
           repeatIO 1_000 (withMVar lock \_ -> readIORef counter >>= writeIORef counter <<< (_ + 1))
         readIORef counter
       count `shouldEqual` 8_000
+
+    it "keeps every modify and read of 32 threads, on an Int and on a record" do
+      totals <- toAff do
+        count <- newMVar 0
+        stats <- newMVar { hits: 0, lastThread: 0 }
+        forConcurrently_ (Array.range 1 32) \thread ->
+          repeatIO 1_000 do
+            modifyMVar_ count (pure <<< (_ + 1))
+            modifyMVar_ stats \seen -> pure { hits: seen.hits + 1, lastThread: thread }
+            seen <- readMVar stats
+            unless (seen.lastThread >= 1 && seen.lastThread <= 32) (throwIO (error "torn read"))
+        counted <- readMVar count
+        seen <- readMVar stats
+        pure { counted, hits: seen.hits }
+      totals `shouldEqual` { counted: 32_000, hits: 32_000 }
 
     it "works as a channel between two threads" do
       received <- toAff do
