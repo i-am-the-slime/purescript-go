@@ -5,7 +5,12 @@ module Test.Go.OS.StdioSpec
 
 import Prelude
 
+import Control.Parallel (parSequence)
+import Data.Array as Array
 import Data.Either (Either(..), either)
+import Data.Foldable (sum)
+import Data.String as String
+import Data.String.CodeUnits (fromCharArray)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (un)
 import Effect (Effect)
@@ -46,6 +51,10 @@ spec = describe "Go.OS.Stdio" do
     output <- asChild "chunks" "größe ✓"
     output.stdout `shouldEqual` "größe ✓|end"
 
+  it "hands each piece of standard input to one of two fibers reading at once" do
+    output <- asChild "two readers" manyCharacters
+    output.stdout `shouldEqual` show (String.length manyCharacters)
+
   it "sees a pipe, not a terminal" do
     output <- asChild "terminal" ""
     output.stdout `shouldEqual` "stdin false, stdout false"
@@ -76,6 +85,7 @@ child = OS.lookupEnv childMode >>= case _ of
     stdout <- Stdio.stdoutIsTerminal
     ran (Stdio.writeStdout ("stdin " <> show stdin <> ", stdout " <> show stdout))
   Just (EnvValue "chunks") -> launchAff_ echoChunks $> true
+  Just (EnvValue "two readers") -> launchAff_ readTogether $> true
   Just (EnvValue "order") -> do
     log "a"
     _ <- Stdio.writeStdout "b\n"
@@ -87,3 +97,13 @@ child = OS.lookupEnv childMode >>= case _ of
     Right (Just text) -> (Stdio.writeStdout text # liftEffect) *> echoChunks
     Right Nothing -> void (Stdio.writeStdout "|end" # liftEffect)
     Left error -> throw (show error) # liftEffect
+  readTogether = do
+    texts <- parSequence [ drain "", drain "" ]
+    void (Stdio.writeStdout (show (sum (map String.length texts))) # liftEffect)
+  drain seen = Stdio.readChunk >>= case _ of
+    Right (Just text) -> drain (seen <> text)
+    Right Nothing -> pure seen
+    Left error -> throw (show error) # liftEffect
+
+manyCharacters :: String
+manyCharacters = fromCharArray (Array.replicate 50_000 'x')

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"github.com/i-am-the-slime/iris-go/eventloop"
@@ -16,6 +17,8 @@ var stdin = bufio.NewReader(os.Stdin)
 
 // pending holds the start of a character that a read split, until the next read completes it.
 var pending []byte
+
+var reading sync.Mutex
 
 func ReadAllImpl[R any](failed func(error) R, read func(string) R) R {
 	data, err := io.ReadAll(os.Stdin)
@@ -37,7 +40,7 @@ func ReadAllBytesImpl[R any](failed func(error) R, read func([]byte) R) R {
 // 64 KiB, so that a line can be any length.
 func ForEachLineImpl[R any](failed func(error) R, done R, handle func(string)) R {
 	for {
-		line, err := stdin.ReadString('\n')
+		line, err := nextLine()
 		if len(line) > 0 {
 			handle(strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r"))
 		}
@@ -69,6 +72,8 @@ func ReadChunkImpl[R any](failed func(error) R, ended R, read func(string) R, fi
 
 // nextChunk returns the next complete characters of standard input, keeping a split one for later.
 func nextChunk() (string, error) {
+	reading.Lock()
+	defer reading.Unlock()
 	buffer := make([]byte, 4096)
 	for {
 		count, err := stdin.Read(buffer)
@@ -82,6 +87,12 @@ func nextChunk() (string, error) {
 			return string(data[:complete]), err
 		}
 	}
+}
+
+func nextLine() (string, error) {
+	reading.Lock()
+	defer reading.Unlock()
+	return stdin.ReadString('\n')
 }
 
 // completeLength is the length of the longest prefix of data that does not end inside a character.
