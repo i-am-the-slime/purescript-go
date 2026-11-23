@@ -103,15 +103,14 @@ import Prelude
 import Data.Array as Array
 import Data.Foldable (sum)
 import Effect (Effect)
-import Effect.Aff (launchAff_)
 import Effect.Class.Console (log)
-import Go.IO (IO, getNumCapabilities, toAff)
+import Go.IO (IO, getNumCapabilities, launchIO_)
 import Go.IO.Async (mapConcurrently)
 
 main :: Effect Unit
-main = launchAff_ do
-  cores <- toAff getNumCapabilities
-  counts <- toAff (mapConcurrently primesBetween chunks)
+main = launchIO_ do
+  cores <- getNumCapabilities
+  counts <- mapConcurrently primesBetween chunks
   log (show (sum counts) <> " primes below 8000000, counted on " <> show cores <> " cores")
   where
   chunks = map (\i -> { from: i * 1_000_000, to: (i + 1) * 1_000_000 }) (Array.range 0 7)
