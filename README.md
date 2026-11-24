@@ -36,7 +36,7 @@ hello Mark
 
 | Package | Modules | |
 | --- | --- | --- |
-| `go-io` | `Go.IO`, `Go.IO.IORef`, `Go.IO.MVar`, `Go.IO.Chan`, `Go.IO.Async`, `Go.IO.Internal`, `Go.Error` | Haskell's `IO` on goroutines, and Go's `error` |
+| `go-io` | `Go.IO`, `Go.IO.IORef`, `Go.IO.MVar`, `Go.IO.Chan`, `Go.IO.Select`, `Go.IO.Context`, `Go.IO.Async`, `Go.IO.Console`, `Go.IO.Internal`, `Go.Error` | Haskell's `IO` on goroutines, and Go's `error` |
 | `go-os` | `Go.OS`, `Go.OS.Stdio`, `Go.FilePath`, `Go.Path.Filepath` | files, directories, environment, arguments, exit, standard input and output, paths |
 | `go-exec` | `Go.OS.Exec` | run programs, collect their output or hand them the terminal |
 | `go-http` | `Go.Net.HTTP` | a server and a client |
@@ -54,7 +54,7 @@ brew install spago i-am-the-slime/tap/iris
 ```
 
 The packages aren't in the registry yet, so add them to your `spago.yaml` straight from GitHub. Pick a
-commit and list every package you use, and the ones they use:
+tag and list every package you use, and the ones they use:
 
 ```yaml
 package:
@@ -66,19 +66,19 @@ workspace:
   extraPackages:
     go-io:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: <commit>
+      ref: v0.1.0
       subdir: packages/go-io
     go-bytes:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: <commit>
+      ref: v0.1.0
       subdir: packages/go-bytes
     go-os:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: <commit>
+      ref: v0.1.0
       subdir: packages/go-os
     go-exec:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: <commit>
+      ref: v0.1.0
       subdir: packages/go-exec
 ```
 
@@ -103,9 +103,9 @@ import Prelude
 import Data.Array as Array
 import Data.Foldable (sum)
 import Effect (Effect)
-import Effect.Class.Console (log)
 import Go.IO (IO, getNumCapabilities, launchIO_)
 import Go.IO.Async (mapConcurrently)
+import Go.IO.Console (log)
 
 main :: Effect Unit
 main = launchIO_ do
@@ -134,9 +134,75 @@ gets its argument worked out first. `concurrently` and `race` take actions that 
 built, so for pure work hand the inputs to `mapConcurrently` or `forConcurrently`.
 
 The names are Haskell's: `forkIO`, `forkFinally`, `threadDelay`, `newIORef`, `atomicModifyIORef'`,
-`newMVar`, `takeMVar`, `putMVar`, `modifyMVar_`, `newChan`, `readChan`, `writeChan`, and from
-`Go.IO.Async`, `async`, `wait`, `concurrently`, `race` and `mapConcurrently`. `throwIO`, `catch`,
-`try`, `bracket` and `finally` work as you'd expect, and `catch` even catches a panic in Go code.
+`newMVar`, `takeMVar`, `putMVar`, `modifyMVar_`, and from `Go.IO.Async`, `async`, `wait`,
+`concurrently`, `race` and `mapConcurrently`. `throwIO`, `catch`, `try`, `bracket` and `finally`
+work as you'd expect, and `catch` even catches a panic in Go code.
+
+`Go.IO.Console` has `log`, `logShow`, `warn`, `error` and friends for `IO`. They print right from
+the thread, and threads printing at the same time each get whole lines.
+
+### Channels, select and contexts
+
+When the Haskell names run out, there's Go's own: `Go.IO.Chan` is Go's typed channels,
+`Go.IO.Select` is its `select`, and `Go.IO.Context` is `context.Context`, so a thread can stop
+waiting once whoever it works for gives up:
+
+```purescript
+module Main where
+
+import Prelude
+
+import Data.Array as Array
+import Data.Maybe (Maybe(..))
+import Data.Time.Duration (Milliseconds(..))
+import Data.Tuple.Nested ((/\))
+import Effect (Effect)
+import Go.IO (IO, forkIO, launchIO_)
+import Go.IO.Chan (Chan, close, newChan, sendAll)
+import Go.IO.Console (log)
+import Go.IO.Context (Context, background, cancel, err, withTimeout)
+import Go.IO.Select (onDone, onReceive, select2)
+
+main :: Effect Unit
+main = launchIO_ do
+  context /\ stop <- withTimeout (Milliseconds 200.0) background
+  numbers <- newChan
+  _ <- forkIO (sendAll numbers (Array.range 1 100) *> close numbers)
+  total <- sumUntilClosed context numbers 0
+  log ("the sum is " <> show total)
+  nobody <- newChan
+  answer <- receiveBefore context nobody
+  reason <- err context
+  log ("then " <> show (answer :: Maybe String) <> ", because " <> show reason)
+  cancel stop
+
+sumUntilClosed :: Context -> Chan Int -> Int -> IO Int
+sumUntilClosed context numbers total = do
+  next <- receiveBefore context numbers
+  case next of
+    Just number -> sumUntilClosed context numbers (total + number)
+    Nothing -> pure total
+
+-- | The next value, or `Nothing` once the channel is closed or the context is done.
+receiveBefore :: forall a. Context -> Chan a -> IO (Maybe a)
+receiveBefore context channel = select2
+  (onReceive channel pure)
+  (onDone context (pure Nothing))
+```
+
+```
+the sum is 5050
+then Nothing, because (Just DeadlineExceeded)
+```
+
+A `Chan Int` is a real `chan int32` in Go, without boxing. `newChan` has no room, so each send
+waits for a receiver; `newBufferedChan n` has room for `n`. `receive` gives you `Nothing` once the
+channel is closed and empty, and `trySend` and `tryReceive` never wait.
+
+`select2` and `select3` wait on that many cases (`onReceive`, `onSend`, `onDone`) and run whichever
+goes first; `trySelect1` and `trySelect2` take a default that runs when none can go right away.
+`withCancel`, `withTimeout` and `withDeadline` make contexts, and `threadDelayWith`,
+`takeMVarWith`, `putMVarWith` and `readMVarWith` stop waiting once theirs is cancelled.
 
 ### Sharing state between threads
 
@@ -183,7 +249,11 @@ the whole throws right away, without waiting for the rest.
 
 - `threadDelay` takes `Milliseconds`, not microseconds.
 - There's no `killThread`, and `race` doesn't cancel the loser. Go can't stop a goroutine from
-  outside, so the loser runs to its end and its result is dropped.
+  outside, so the loser runs to its end and its result is dropped. If a thread should stop early,
+  hand it a `Context` and have it wait with `select2`, `threadDelayWith` or the `…With` MVar
+  functions.
+- `mapConcurrently`, `forConcurrently`, `replicateConcurrently` and their `_` versions take and
+  return an `Array`, not any `Traversable`.
 - The program doesn't wait for its threads. Wait for them with an `MVar` or `Async`.
 - `unsafePerformEffect` inside `IO` is as unsupported as `unsafePerformIO` is risky in Haskell: the
   `Effect` runs on whatever goroutine evaluates it, off the event loop.
