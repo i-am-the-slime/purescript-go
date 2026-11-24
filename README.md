@@ -66,19 +66,19 @@ workspace:
   extraPackages:
     go-io:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.1.0
+      ref: v0.2.0
       subdir: packages/go-io
     go-bytes:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.1.0
+      ref: v0.2.0
       subdir: packages/go-bytes
     go-os:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.1.0
+      ref: v0.2.0
       subdir: packages/go-os
     go-exec:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.1.0
+      ref: v0.2.0
       subdir: packages/go-exec
 ```
 
@@ -211,6 +211,11 @@ at once can lose an update. Use an `MVar` (`modifyMVar_`, `withMVar`) or an `IOR
 `atomicModifyIORef'` instead: those are atomic, however many threads hit them. Iris's
 [Effect, Aff and IO](https://github.com/i-am-the-slime/iris-go-backend/blob/main/documentation/go/effects.md)
 guide has the details.
+
+Writing Go for a foreign import that takes an `IORef`? On the Go side it's a pointer with
+`.Load()`, `.Store(value)` and `.Modify(f)`, and `New(value)` makes one. Iris calls these methods
+directly for `readIORef`, `writeIORef` and `newIORef`, so your Go and the compiled PureScript read
+the same way.
 
 ### ParIO
 
