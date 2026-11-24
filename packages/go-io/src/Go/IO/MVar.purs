@@ -7,6 +7,9 @@ module Go.IO.MVar
   , takeMVar
   , putMVar
   , readMVar
+  , takeMVarWith
+  , putMVarWith
+  , readMVarWith
   , tryTakeMVar
   , tryPutMVar
   , tryReadMVar
@@ -23,6 +26,7 @@ import Data.Maybe (Maybe(..))
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect (Effect)
 import Go.IO (onException)
+import Go.IO.Context (Context)
 import Go.IO.Internal (IO(..))
 
 foreign import data MVar :: Type -> Type
@@ -48,6 +52,24 @@ putMVar box value = IO (putMVarImpl box value)
 -- | take in between.
 readMVar :: forall a. MVar a -> IO a
 readMVar box = IO (readMVarImpl box)
+
+-- | `takeMVar`, giving up once the context is done: `Nothing` then.
+takeMVarWith :: forall a. Context -> MVar a -> IO (Maybe a)
+takeMVarWith context box = IO (takeMVarWithImpl Nothing Just context box)
+
+foreign import takeMVarWithImpl :: forall a r. r -> (a -> r) -> Context -> MVar a -> Effect r
+
+-- | `putMVar`, giving up once the context is done. `true` if it put the value in.
+putMVarWith :: forall a. Context -> MVar a -> a -> IO Boolean
+putMVarWith context box value = IO (putMVarWithImpl context box value)
+
+foreign import putMVarWithImpl :: forall a. Context -> MVar a -> a -> Effect Boolean
+
+-- | `readMVar`, giving up once the context is done: `Nothing` then.
+readMVarWith :: forall a. Context -> MVar a -> IO (Maybe a)
+readMVarWith context box = IO (readMVarWithImpl Nothing Just context box)
+
+foreign import readMVarWithImpl :: forall a r. r -> (a -> r) -> Context -> MVar a -> Effect r
 
 tryTakeMVar :: forall a. MVar a -> IO (Maybe a)
 tryTakeMVar box = IO (tryTakeMVarImpl Nothing Just box)

@@ -1,6 +1,7 @@
 package ffi
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -32,6 +33,22 @@ func ForkIOImpl(action func()) int32 {
 
 func ThreadDelayImpl(milliseconds float64) {
 	time.Sleep(time.Duration(milliseconds * float64(time.Millisecond)))
+}
+
+// ThreadDelayWithImpl sleeps for the duration, or until the context is done, and says whether it
+// slept all of it.
+func ThreadDelayWithImpl(ctx context.Context, milliseconds float64) bool {
+	if ctx.Err() != nil {
+		return false
+	}
+	timer := time.NewTimer(time.Duration(milliseconds * float64(time.Millisecond)))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func YieldImpl() { runtime.Gosched() }
@@ -78,12 +95,16 @@ func LaunchImpl(action func()) {
 }
 
 func attempt[A any](action func() A) (result A, failure exception.Error, failed bool) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			failure, failed = asError(recovered), true
-		}
-	}()
+	defer recoverInto(&failure, &failed)
 	return action(), exception.Error{}, false
+}
+
+// recoverInto, deferred, turns a panic into the failure. It never sees the action's result, so
+// attempt passes that on as it is, unboxed.
+func recoverInto(failure *exception.Error, failed *bool) {
+	if recovered := recover(); recovered != nil {
+		*failure, *failed = asError(recovered), true
+	}
 }
 
 func asError(recovered any) exception.Error {

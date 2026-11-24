@@ -1,38 +1,50 @@
 package ffi
 
-import "sync"
+// Chan is a Go channel.
+type Chan[A any] = chan A
 
-// Chan is an unbounded first-in, first-out queue.
-type Chan[A any] = *channel[A]
+// ReceiveChan is a Go channel that can only be received from, such as a context's Done.
+type ReceiveChan[A any] = <-chan A
 
-type channel[A any] struct {
-	lock    sync.Mutex
-	written sync.Cond
-	queue   []A
-}
+func NewChanImpl[A any]() chan A { return make(chan A) }
 
-func NewChanImpl[A any]() *channel[A] {
-	queue := &channel[A]{}
-	queue.written.L = &queue.lock
-	return queue
-}
+func NewBufferedChanImpl[A any](capacity int32) chan A { return make(chan A, capacity) }
 
-func WriteChanImpl[A any](queue *channel[A], value A) {
-	queue.lock.Lock()
-	queue.queue = append(queue.queue, value)
-	queue.lock.Unlock()
-	queue.written.Signal()
-}
+func ReceiveEndImpl[A any](channel chan A) <-chan A { return channel }
 
-func ReadChanImpl[A any](queue *channel[A]) A {
-	queue.lock.Lock()
-	defer queue.lock.Unlock()
-	for len(queue.queue) == 0 {
-		queue.written.Wait()
+func SendImpl[A any](channel chan A, value A) { channel <- value }
+
+func ReceiveImpl[A, R any](closed R, received func(A) R, channel <-chan A) R {
+	value, open := <-channel
+	if !open {
+		return closed
 	}
-	value := queue.queue[0]
-	var zero A
-	queue.queue[0] = zero
-	queue.queue = queue.queue[1:]
-	return value
+	return received(value)
 }
+
+func CloseImpl[A any](channel chan A) { close(channel) }
+
+func TrySendImpl[A any](channel chan A, value A) bool {
+	select {
+	case channel <- value:
+		return true
+	default:
+		return false
+	}
+}
+
+func TryReceiveImpl[A, R any](empty R, closed R, received func(A) R, channel <-chan A) R {
+	select {
+	case value, open := <-channel:
+		if !open {
+			return closed
+		}
+		return received(value)
+	default:
+		return empty
+	}
+}
+
+func CapacityImpl[A any](channel <-chan A) int32 { return int32(cap(channel)) }
+
+func LengthImpl[A any](channel <-chan A) int32 { return int32(len(channel)) }

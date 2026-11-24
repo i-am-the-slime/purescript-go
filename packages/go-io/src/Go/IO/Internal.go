@@ -31,19 +31,17 @@ func BothImpl[A, B, C any](combine func(A) func(B) C, left func() A, right func(
 	var leftValue A
 	var rightValue B
 	go func() {
-		value, failure, failed := attempt(left)
-		leftValue = value
+		leftResult, failure, failed := attempt(left)
+		leftValue = leftResult
 		failures <- failedWith(failure, failed)
 	}()
 	go func() {
-		value, failure, failed := attempt(right)
-		rightValue = value
+		rightResult, failure, failed := attempt(right)
+		rightValue = rightResult
 		failures <- failedWith(failure, failed)
 	}()
 	for range 2 {
-		if failure := <-failures; failure != nil {
-			panic(*failure)
-		}
+		rethrowIfFailed(<-failures)
 	}
 	return combine(leftValue)(rightValue)
 }
@@ -113,22 +111,28 @@ func awaitAll(failures chan *exception.Error, count int) {
 // FirstImpl runs both effects on goroutines of their own and returns the outcome of the first to
 // finish.
 func FirstImpl[A any](left func() A, right func() A) A {
-	type outcome struct {
-		value   A
-		failure *exception.Error
-	}
-	first := make(chan outcome, 2)
+	first := make(chan outcome[A], 2)
 	for _, effect := range []func() A{left, right} {
 		go func() {
 			value, failure, failed := attempt(effect)
-			first <- outcome{value: value, failure: failedWith(failure, failed)}
+			first <- outcome[A]{value: value, failure: failedWith(failure, failed)}
 		}()
 	}
 	winner := <-first
-	if winner.failure != nil {
-		panic(*winner.failure)
-	}
+	rethrowIfFailed(winner.failure)
 	return winner.value
+}
+
+func rethrowIfFailed(failure *exception.Error) {
+	if failure != nil {
+		panic(*failure)
+	}
+}
+
+// outcome is how one of FirstImpl's effects ended.
+type outcome[A any] struct {
+	value   A
+	failure *exception.Error
 }
 
 // NeverImpl waits forever.
@@ -144,12 +148,16 @@ func failedWith(failure exception.Error, failed bool) *exception.Error {
 }
 
 func attempt[A any](action func() A) (result A, failure exception.Error, failed bool) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			failure, failed = asError(recovered), true
-		}
-	}()
+	defer recoverInto(&failure, &failed)
 	return action(), exception.Error{}, false
+}
+
+// recoverInto, deferred, turns a panic into the failure. It never sees the action's result, so
+// attempt passes that on as it is, unboxed.
+func recoverInto(failure *exception.Error, failed *bool) {
+	if recovered := recover(); recovered != nil {
+		*failure, *failed = asError(recovered), true
+	}
 }
 
 func asError(recovered any) exception.Error {

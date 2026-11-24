@@ -29,8 +29,8 @@ import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
 import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, threadDelay, throwIO, toAff, try)
 import Go.IO.Async (concurrently, concurrently_, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
-import Go.IO.Chan (newChan, readChan, writeList2Chan)
-import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
+import Go.IO.Chan (newChan, receive, sendAll)
+import Go.IO.IORef (atomicModifyIORef', modifyIORef, newIORef, readIORef, writeIORef)
 import Go.IO.MVar (modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar, withMVar)
 import Go.Net.HTTP (Address(..), Status(..), URL(..))
 import Go.Net.HTTP as HTTP
@@ -74,6 +74,12 @@ spec = describe "Go.IO" do
         readIORef counter
       count `shouldEqual` 80_000
 
+    it "updates a record a million times in time linear in the updates" do
+      small <- timed (toAff (bumpRecord 100_000))
+      large <- timed (toAff (bumpRecord 1_000_000))
+      log ("  100k updates " <> show (Int.round small) <> " ms, 1M updates " <> show (Int.round large) <> " ms")
+      large `shouldSatisfy` (_ < max 50.0 (small * 30.0))
+
   describe "MVar" do
     it "works as a lock around a read and a write" do
       count <- toAff do
@@ -107,12 +113,12 @@ spec = describe "Go.IO" do
       received `shouldEqual` Array.range 1 100
 
   describe "Chan" do
-    it "delivers in the order written" do
+    it "delivers in the order sent" do
       received <- toAff do
-        queue <- newChan
-        _ <- forkIO (writeList2Chan queue (Array.range 1 1_000))
-        traverseIO (Array.range 1 1_000) (\_ -> readChan queue)
-      received `shouldEqual` Array.range 1 1_000
+        channel <- newChan
+        _ <- forkIO (sendAll channel (Array.range 1 1_000))
+        traverseIO (Array.range 1 1_000) (\_ -> receive channel)
+      received `shouldEqual` map Just (Array.range 1 1_000)
 
   describe "Async" do
     it "returns every result, in order" do
@@ -274,6 +280,13 @@ spec = describe "Go.IO" do
       HTTP.shutdown server
       HTTP.status answer `shouldEqual` Status 200
       HTTP.responseBody answer `shouldEqual` "110"
+
+-- | Counts in a record that also holds the latest of an array kept alongside.
+bumpRecord :: Int -> IO { count :: Int, latest :: Array Int, label :: String }
+bumpRecord times = do
+  state <- newIORef { count: 0, latest: [], label: "counter" }
+  repeatIO times (modifyIORef state \seen -> seen { count = seen.count + 1, latest = [ seen.count ] })
+  readIORef state
 
 -- | A pure loop that keeps one core busy.
 spin :: Int -> Int

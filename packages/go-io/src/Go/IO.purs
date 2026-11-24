@@ -7,6 +7,7 @@ module Go.IO
   , forkIO
   , forkFinally
   , threadDelay
+  , threadDelayWith
   , yield
   , getNumCapabilities
   , toAff
@@ -31,6 +32,7 @@ import Effect (Effect)
 import Effect.Aff (Aff, makeAff, nonCanceler)
 import Effect.Class (liftEffect)
 import Effect.Exception (Error)
+import Go.IO.Context (Context)
 import Go.IO.Internal (IO, ParIO)
 import Go.IO.Internal as Internal
 
@@ -61,6 +63,12 @@ threadDelay :: Milliseconds -> IO Unit
 threadDelay (Milliseconds duration) = Internal.IO (threadDelayImpl duration)
 
 foreign import threadDelayImpl :: Number -> Effect Unit
+
+-- | `threadDelay`, waking early once the context is done. `true` if it waited the whole duration.
+threadDelayWith :: Context -> Milliseconds -> IO Boolean
+threadDelayWith context (Milliseconds duration) = Internal.IO (threadDelayWithImpl context duration)
+
+foreign import threadDelayWithImpl :: Context -> Number -> Effect Boolean
 
 -- | Lets other threads run, like `runtime.Gosched`.
 yield :: IO Unit

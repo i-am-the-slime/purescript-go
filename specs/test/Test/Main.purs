@@ -10,6 +10,7 @@ import Effect.Class (liftEffect)
 import Go.OS (ExitCode(..))
 import Go.OS as OS
 import Test.Go.BytesSpec as BytesSpec
+import Test.Go.IO.ChannelSpec as ChannelSpec
 import Test.Go.IOSpec as IOSpec
 import Test.Go.Net.HTTPSpec as HTTPSpec
 import Test.Go.OS.ExecSpec as ExecSpec
@@ -42,3 +43,4 @@ specs = do
   TimeSpec.spec
   HTTPSpec.spec
   IOSpec.spec
+  ChannelSpec.spec

@@ -1,6 +1,9 @@
 package ffi
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 // MVar is a box that is empty or holds one value.
 type MVar[A any] = *mvar[A]
@@ -24,7 +27,7 @@ func TakeMVarImpl[A any](box *mvar[A]) A {
 	for !box.full {
 		box.changed.Wait()
 	}
-	return box.take()
+	return take(box)
 }
 
 func PutMVarImpl[A any](box *mvar[A], value A) {
@@ -33,7 +36,7 @@ func PutMVarImpl[A any](box *mvar[A], value A) {
 	for box.full {
 		box.changed.Wait()
 	}
-	box.put(value)
+	put(box, value)
 }
 
 func ReadMVarImpl[A any](box *mvar[A]) A {
@@ -45,13 +48,65 @@ func ReadMVarImpl[A any](box *mvar[A]) A {
 	return box.value
 }
 
+func TakeMVarWithImpl[A, R any](interrupted R, taken func(A) R, ctx context.Context, box *mvar[A]) R {
+	box.lock.Lock()
+	defer box.lock.Unlock()
+	if !awaitFullness(ctx, box, true) {
+		return interrupted
+	}
+	return taken(take(box))
+}
+
+func PutMVarWithImpl[A any](ctx context.Context, box *mvar[A], value A) bool {
+	box.lock.Lock()
+	defer box.lock.Unlock()
+	if !awaitFullness(ctx, box, false) {
+		return false
+	}
+	put(box, value)
+	return true
+}
+
+func ReadMVarWithImpl[A, R any](interrupted R, read func(A) R, ctx context.Context, box *mvar[A]) R {
+	box.lock.Lock()
+	defer box.lock.Unlock()
+	if !awaitFullness(ctx, box, true) {
+		return interrupted
+	}
+	return read(box.value)
+}
+
+// awaitFullness waits, holding the box's lock, until the box is full or empty as asked, and says
+// whether it is. It isn't once the context is done: a waiter that is woken then sees it.
+func awaitFullness[A any](ctx context.Context, box *mvar[A], full bool) bool {
+	if box.full == full {
+		return true
+	}
+	if ctx.Err() != nil {
+		return false
+	}
+	stopWaking := context.AfterFunc(ctx, func() {
+		box.lock.Lock()
+		box.changed.Broadcast()
+		box.lock.Unlock()
+	})
+	defer stopWaking()
+	for box.full != full {
+		if ctx.Err() != nil {
+			return false
+		}
+		box.changed.Wait()
+	}
+	return true
+}
+
 func TryTakeMVarImpl[A, R any](empty R, found func(A) R, box *mvar[A]) R {
 	box.lock.Lock()
 	defer box.lock.Unlock()
 	if !box.full {
 		return empty
 	}
-	return found(box.take())
+	return found(take(box))
 }
 
 func TryPutMVarImpl[A any](box *mvar[A], value A) bool {
@@ -60,7 +115,7 @@ func TryPutMVarImpl[A any](box *mvar[A], value A) bool {
 	if box.full {
 		return false
 	}
-	box.put(value)
+	put(box, value)
 	return true
 }
 
@@ -79,7 +134,8 @@ func IsEmptyMVarImpl[A any](box *mvar[A]) bool {
 	return !box.full
 }
 
-func (box *mvar[A]) take() A {
+// take empties the box, which holds its lock, and wakes its waiters.
+func take[A any](box *mvar[A]) A {
 	value := box.value
 	var zero A
 	box.value, box.full = zero, false
@@ -87,7 +143,8 @@ func (box *mvar[A]) take() A {
 	return value
 }
 
-func (box *mvar[A]) put(value A) {
+// put fills the box, which holds its lock, and wakes its waiters.
+func put[A any](box *mvar[A], value A) {
 	box.value, box.full = value, true
 	box.changed.Broadcast()
 }

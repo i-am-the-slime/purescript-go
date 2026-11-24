@@ -22,6 +22,7 @@ import Control.Monad.Error.Class (class MonadError, class MonadThrow)
 import Control.Parallel.Class (class Parallel)
 import Control.Plus (class Plus)
 import Control.Monad.Rec.Class (class MonadRec)
+import Data.Newtype (class Newtype)
 import Effect (Effect)
 import Effect.Class (class MonadEffect)
 import Effect.Exception (Error, throwException)
@@ -30,6 +31,7 @@ import Effect.Exception (Error, throwException)
 -- | `IO` threads.
 newtype IO a = IO (Effect a)
 
+derive instance Newtype (IO a) _
 derive newtype instance Functor IO
 derive newtype instance Apply IO
 derive newtype instance Applicative IO
