@@ -25,11 +25,14 @@ func (ref *ioref[A]) Modify(f func(A) A) {
 	}
 }
 
-func NewIORefImpl[A any](value A) *ioref[A] {
+// New makes a cell holding value.
+func New[A any](value A) *ioref[A] {
 	ref := &ioref[A]{}
 	ref.value.Store(&value)
 	return ref
 }
+
+func NewIORefImpl[A any](value A) *ioref[A] { return New(value) }
 
 func ReadIORefImpl[A any](ref *ioref[A]) A { return ref.Load() }
 
