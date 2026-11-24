@@ -38,10 +38,16 @@ func YieldImpl() { runtime.Gosched() }
 
 func NumCapabilitiesImpl() int32 { return int32(runtime.GOMAXPROCS(0)) }
 
-// ToAffImpl runs the action on a goroutine of its own and hands its outcome to succeeded or failed,
-// IO actions on that goroutine. Until then it keeps the program running. An exception either
-// throws ends the program as an uncaught Go panic: `panic: <message>`, Go's stack, exit status 2.
+// ToAffImpl is LaunchIOImpl, for toAff to resume a fiber with.
 func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.Error)) {
+	LaunchIOImpl(action, succeeded, failed)
+}
+
+// LaunchIOImpl runs the action on a goroutine of its own and hands its outcome to succeeded or
+// failed, IO actions on that goroutine. Until then it keeps the program running. An exception
+// either throws ends the program as an uncaught Go panic: `panic: <message>`, Go's stack, exit
+// status 2.
+func LaunchIOImpl[A any](action func() A, succeeded func(A), failed func(exception.Error)) {
 	retire := eventloop.Hold()
 	go func() {
 		value, failure, didFail := attempt(action)
@@ -49,6 +55,23 @@ func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.
 			failed(failure)
 		} else {
 			succeeded(value)
+		}
+		retire()
+	}()
+}
+
+// LaunchImpl runs the action on a goroutine of its own and returns right away. Until it's done it
+// keeps the program running. An exception it throws is rethrown on the event loop, where nothing
+// catches it: it ends the program as an uncaught Go panic.
+func LaunchImpl(action func()) {
+	retire := eventloop.Hold()
+	go func() {
+		_, failure, failed := attempt(func() struct{} {
+			action()
+			return struct{}{}
+		})
+		if failed {
+			eventloop.Turn(func() { panic(failure) })
 		}
 		retire()
 	}()

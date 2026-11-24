@@ -33,15 +33,14 @@ module Go.IO.Async
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Parallel (parTraverse, parTraverse_, parallel, sequential)
+import Control.Parallel (parallel, sequential)
 import Data.Array as Array
 import Data.Either (Either(..), either)
-import Data.Foldable (class Foldable)
 import Data.Maybe (Maybe)
-import Data.Traversable (class Traversable)
 import Data.Tuple.Nested (type (/\), (/\))
 import Effect.Exception (Error)
 import Go.IO (IO, forkFinally, throwIO)
+import Go.IO.Internal (both_, forArrayConcurrently_, mapArrayConcurrently)
 import Go.IO.MVar (MVar, newEmptyMVar, putMVar, readMVar, tryReadMVar)
 
 -- | An action running on a thread of its own, and its result once it has one.
@@ -71,7 +70,7 @@ concurrently :: forall a b. IO a -> IO b -> IO (a /\ b)
 concurrently left right = sequential ((/\) <$> parallel left <*> parallel right)
 
 concurrently_ :: forall a b. IO a -> IO b -> IO Unit
-concurrently_ left right = void (concurrently left right)
+concurrently_ left right = both_ (void left) (void right)
 
 -- | Runs both at the same time and returns the result of the first to finish. If that one threw,
 -- | this throws the same.
@@ -81,24 +80,19 @@ race left right = sequential (parallel (Left <$> left) <|> parallel (Right <$> r
 race_ :: forall a b. IO a -> IO b -> IO Unit
 race_ left right = void (race left right)
 
--- | Runs the action for every element at the same time and returns the results in order. If any
--- | throws, this throws the first exception as soon as it happens.
-mapConcurrently :: forall t a b. Traversable t => (a -> IO b) -> t a -> IO (t b)
-mapConcurrently f = parTraverse (onItsThread f)
+-- | Runs `f` on every element at the same time, each on a thread of its own, and returns the
+-- | results in order. If any throws, this throws the first exception as soon as it happens.
+mapConcurrently :: forall a b. (a -> IO b) -> Array a -> IO (Array b)
+mapConcurrently = mapArrayConcurrently
 
-mapConcurrently_ :: forall f a b. Foldable f => (a -> IO b) -> f a -> IO Unit
-mapConcurrently_ f = parTraverse_ (onItsThread f)
+mapConcurrently_ :: forall a b. (a -> IO b) -> Array a -> IO Unit
+mapConcurrently_ f elements = forArrayConcurrently_ elements (void <<< f)
 
-forConcurrently :: forall t a b. Traversable t => t a -> (a -> IO b) -> IO (t b)
+forConcurrently :: forall a b. Array a -> (a -> IO b) -> IO (Array b)
 forConcurrently = flip mapConcurrently
 
-forConcurrently_ :: forall f a b. Foldable f => f a -> (a -> IO b) -> IO Unit
+forConcurrently_ :: forall a b. Array a -> (a -> IO b) -> IO Unit
 forConcurrently_ = flip mapConcurrently_
-
--- | `f x` as an action that applies `f` once it runs, on its thread, rather than while the
--- | actions are being built.
-onItsThread :: forall a b. (a -> IO b) -> a -> IO b
-onItsThread f x = pure unit >>= \_ -> f x
 
 -- | Runs the action that many times at the same time.
 replicateConcurrently :: forall a. Int -> IO a -> IO (Array a)

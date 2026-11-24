@@ -25,13 +25,13 @@ module Go.IO
 import Prelude
 
 import Control.Monad.Error.Class (catchError, throwError)
-import Data.Either (Either(..), either)
+import Data.Either (Either(..))
 import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Aff (Aff, makeAff, nonCanceler)
 import Effect.Class (liftEffect)
-import Effect.Exception (Error, throwException)
-import Go.IO.Internal (Boxed(..), IO, ParIO, unbox)
+import Effect.Exception (Error)
+import Go.IO.Internal (IO, ParIO)
 import Go.IO.Internal as Internal
 
 -- | A thread `forkIO` started.
@@ -79,24 +79,28 @@ foreign import numCapabilitiesImpl :: Effect Int
 -- | and the handlers of a server in the same program, run meanwhile. An exception the action
 -- | throws becomes the fiber's error.
 toAff :: forall a. IO a -> Aff a
-toAff action = makeAff \resolve -> toAffImpl (Boxed <$> action) (resuming resolve <<< Right <<< unbox) (resuming resolve <<< Left) $> nonCanceler
+toAff action = makeAff \resolve -> toAffImpl action (resuming resolve <<< Right) (resuming resolve <<< Left) $> nonCanceler
   where
   resuming resolve outcome = Internal.IO (resolve outcome)
+
+foreign import toAffImpl :: forall a. IO a -> (a -> IO Unit) -> (Error -> IO Unit) -> Effect Unit
 
 -- | Starts the action on a thread of its own and returns right away, as `launchAff` does. The
 -- | callback gets its outcome on the event loop once it's done, and until then the program keeps
 -- | running.
 launchIO :: forall a. IO a -> (Either Error a -> Effect Unit) -> Effect Unit
-launchIO action handle = toAffImpl (Boxed <$> action) (handling <<< Right <<< unbox) (handling <<< Left)
+launchIO action handle = launchIOImpl action (handling <<< Right) (handling <<< Left)
   where
   handling outcome = handle outcome # liftEffect
 
-foreign import toAffImpl :: forall a. IO a -> (a -> IO Unit) -> (Error -> IO Unit) -> Effect Unit
+foreign import launchIOImpl :: forall a. IO a -> (a -> IO Unit) -> (Error -> IO Unit) -> Effect Unit
 
 -- | Starts the action on a thread of its own and returns right away, as `launchAff_` does. An
 -- | exception the action doesn't catch is rethrown on the event loop and ends the program.
 launchIO_ :: IO Unit -> Effect Unit
-launchIO_ action = launchIO action (either throwException pure)
+launchIO_ = launchImpl
+
+foreign import launchImpl :: IO Unit -> Effect Unit
 
 throwIO :: forall a. Error -> IO a
 throwIO = throwError

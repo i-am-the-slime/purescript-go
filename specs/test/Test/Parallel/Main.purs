@@ -7,7 +7,7 @@ import Data.Either (Either(..))
 import Data.Time.Duration (Milliseconds(..))
 import Effect (Effect)
 import Effect.Class (liftEffect)
-import Effect.Class.Console (log)
+import Go.IO.Console (log)
 import Effect.Exception (error)
 import Go.IO (IO, launchIO_, threadDelay, throwIO)
 import Go.IO.Async (concurrently_, forConcurrently_, race)
@@ -21,6 +21,7 @@ main = launchIO_ do
   counted <- modifyFromThreads
   log ("32 threads counted " <> show counted.count <> " and " <> show counted.hits <> " hits")
   unless (counted == { count: 32_000, hits: 32_000 }) (throwIO (error "lost a modify"))
+  forConcurrently_ (Array.range 1 4) \thread -> log ("thread " <> show thread <> " logged on its own")
 
 meetInsideLiftEffect :: IO Unit
 meetInsideLiftEffect = race (threadDelay (Milliseconds 5_000.0)) handshake >>= case _ of

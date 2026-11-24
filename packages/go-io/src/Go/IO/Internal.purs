@@ -1,6 +1,7 @@
 -- | The representation of `Go.IO`'s `IO`, for the modules that build `IO` actions out of Go
 -- | foreign functions. Wrapping an arbitrary `Effect` this way runs it off the event loop, which
--- | is only safe for code that touches no Aff, `Ref` or console state; programs use `Go.IO`.
+-- | is only safe for code that touches no Aff or `Ref`; programs use `Go.IO`. The console is
+-- | safe: Iris's console locks its state, so `Go.IO.Console` prints from any thread.
 -- |
 -- | `IO` is also the type of a callback that Go calls on a goroutine of its own, such as an HTTP
 -- | handler: it gets at the event loop with `liftEffect`. A callback typed `Effect` is only ever
@@ -8,8 +9,9 @@
 module Go.IO.Internal
   ( IO(..)
   , ParIO(..)
-  , Boxed(..)
-  , unbox
+  , both_
+  , mapArrayConcurrently
+  , forArrayConcurrently_
   ) where
 
 import Prelude
@@ -24,13 +26,6 @@ import Effect (Effect)
 import Effect.Class (class MonadEffect)
 import Effect.Exception (Error, throwException)
 
--- | A value on its way through a generic Go function. Go has no type for nothing, so a `Unit`
--- | can't be the type argument of one; a `Boxed Unit` can.
-data Boxed a = Boxed a
-
-unbox :: forall a. Boxed a -> a
-unbox (Boxed value) = value
-
 -- | An action that runs on a goroutine of its own, off the event loop, in parallel with other
 -- | `IO` threads.
 newtype IO a = IO (Effect a)
@@ -42,16 +37,16 @@ derive newtype instance Bind IO
 derive newtype instance Monad IO
 derive newtype instance MonadRec IO
 
--- | `liftEffect` waits for the program's event loop, where `Ref`s, `log` and `Aff` live, runs the
--- | `Effect` there and comes back with its result. So `log` and `Ref`s work inside `IO` as they do
--- | in `Aff`. Keep it short: while it runs, no fiber does. An exception it throws is thrown in the
+-- | `liftEffect` waits for the program's event loop, where `Ref`s and `Aff` live, runs the
+-- | `Effect` there and comes back with its result. So `Ref`s work inside `IO` as they do in
+-- | `Aff`. Keep it short: while it runs, no fiber does. An exception it throws is thrown in the
 -- | `IO` action.
 -- |
--- | Each `liftEffect` is a trip to the event loop and back, about 80 ns. That's nothing next to a
--- | `log`, but a lot inside a hot loop: keep state a loop updates in an `IORef`, which an `IO`
--- | thread changes without leaving its goroutine.
+-- | Each `liftEffect` is a trip to the event loop and back, about 80 ns. Logging needs none:
+-- | `Go.IO.Console`'s `log` prints right from the thread. Keep state a hot loop updates in an
+-- | `IORef`, which an `IO` thread changes without leaving its goroutine.
 instance MonadEffect IO where
-  liftEffect action = IO (unbox <$> liftEffectImpl (Boxed <$> action))
+  liftEffect action = IO (liftEffectImpl action)
 
 foreign import liftEffectImpl :: forall a. Effect a -> Effect a
 
@@ -61,7 +56,7 @@ instance MonadThrow Error IO where
 -- | Catches anything the action throws: a PureScript `Error`, or a panic in Go foreign code, which
 -- | arrives as an `Error` with the panic's message.
 instance MonadError Error IO where
-  catchError action handler = IO (unbox <$> catchImpl (map Boxed <<< handler) (Boxed <$> action))
+  catchError action handler = IO (catchImpl handler action)
 
 foreign import catchImpl :: forall a. (Error -> IO a) -> IO a -> Effect a
 
@@ -79,12 +74,30 @@ instance Functor ParIO where
 -- | whole, as soon as it happens. Go can't stop the other thread: it runs to its end and its
 -- | result is dropped.
 instance Apply ParIO where
-  apply (ParIO functions) (ParIO values) =
-    ParIO (IO (unbox <$> bothImpl applyBoxed (Boxed <$> functions) (Boxed <$> values)))
-    where
-    applyBoxed (Boxed f) (Boxed value) = Boxed (f value)
+  apply (ParIO functions) (ParIO values) = ParIO (IO (bothImpl identity functions values))
 
 foreign import bothImpl :: forall a b c. (a -> b -> c) -> IO a -> IO b -> Effect c
+
+-- | Runs both on threads of their own and waits for both, as `<*>` on `ParIO` does, without
+-- | results to combine.
+both_ :: IO Unit -> IO Unit -> IO Unit
+both_ left right = IO (bothUnitImpl left right)
+
+foreign import bothUnitImpl :: IO Unit -> IO Unit -> Effect Unit
+
+-- | Runs `f` on every element, each on a thread of its own, and waits for all of them. The
+-- | results come back in order. If one throws, so does the whole, as soon as it happens; the
+-- | other threads run to their end and their results are dropped.
+mapArrayConcurrently :: forall a b. (a -> IO b) -> Array a -> IO (Array b)
+mapArrayConcurrently f elements = IO (mapArrayConcurrentlyImpl f elements)
+
+foreign import mapArrayConcurrentlyImpl :: forall a b. (a -> IO b) -> Array a -> Effect (Array b)
+
+-- | `mapArrayConcurrently` without results.
+forArrayConcurrently_ :: forall a. Array a -> (a -> IO Unit) -> IO Unit
+forArrayConcurrently_ elements f = IO (forArrayConcurrentlyImpl elements f)
+
+foreign import forArrayConcurrentlyImpl :: forall a. Array a -> (a -> IO Unit) -> Effect Unit
 
 instance Applicative ParIO where
   pure value = ParIO (pure value)
@@ -92,14 +105,13 @@ instance Applicative ParIO where
 -- | Runs both sides on threads of their own and returns the first to finish. If that one threw,
 -- | this throws the same. The other keeps running, and its result is dropped.
 instance Alt ParIO where
-  alt (ParIO left) (ParIO right) =
-    ParIO (IO (unbox <$> firstImpl (Boxed <$> left) (Boxed <$> right)))
+  alt (ParIO left) (ParIO right) = ParIO (IO (firstImpl left right))
 
 foreign import firstImpl :: forall a. IO a -> IO a -> Effect a
 
 -- | `empty` never finishes, so it never wins a race.
 instance Plus ParIO where
-  empty = ParIO (IO (unbox <$> neverImpl))
+  empty = ParIO (IO neverImpl)
 
 foreign import neverImpl :: forall a. Effect a
 

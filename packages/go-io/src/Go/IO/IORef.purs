@@ -16,7 +16,7 @@ import Prelude
 import Data.Tuple (fst, snd)
 import Data.Tuple.Nested (type (/\))
 import Effect (Effect)
-import Go.IO.Internal (Boxed(..), IO(..), unbox)
+import Go.IO.Internal (IO(..))
 
 foreign import data IORef :: Type -> Type
 
@@ -41,7 +41,7 @@ modifyIORef' ref f = readIORef ref >>= writeIORef ref <<< f
 -- | if another thread writes in between, it applies the function again to the new value. The
 -- | function should be cheap and do nothing else.
 atomicModifyIORef' :: forall a b. IORef a -> (a -> a /\ b) -> IO b
-atomicModifyIORef' ref f = IO (unbox <$> atomicModifyIORefImpl fst (Boxed <<< snd) f ref)
+atomicModifyIORef' ref f = IO (atomicModifyIORefImpl fst snd f ref)
 
 -- | PureScript evaluates eagerly, so this is `atomicModifyIORef'`.
 atomicModifyIORef :: forall a b. IORef a -> (a -> a /\ b) -> IO b

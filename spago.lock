@@ -57,6 +57,7 @@
           "dependencies": [
             "aff",
             "arrays",
+            "console",
             "control",
             "datetime",
             "effect",

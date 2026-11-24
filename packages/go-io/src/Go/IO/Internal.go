@@ -48,6 +48,68 @@ func BothImpl[A, B, C any](combine func(A) func(B) C, left func() A, right func(
 	return combine(leftValue)(rightValue)
 }
 
+// BothUnitImpl runs both actions on goroutines of their own and waits for both. The first
+// exception either throws is rethrown here, without waiting for the other.
+func BothUnitImpl(left func(), right func()) {
+	failures := make(chan *exception.Error, 2)
+	for _, action := range []func(){left, right} {
+		go func() {
+			_, failure, failed := attempt(func() struct{} {
+				action()
+				return struct{}{}
+			})
+			failures <- failedWith(failure, failed)
+		}()
+	}
+	for range 2 {
+		if failure := <-failures; failure != nil {
+			panic(*failure)
+		}
+	}
+}
+
+// MapArrayConcurrentlyImpl applies f to every element on a goroutine of its own and returns the
+// results in order. The first exception any throws is rethrown here, without waiting for the
+// others.
+func MapArrayConcurrentlyImpl[A, B any](f func(A) B, elements []A) []B {
+	results := make([]B, len(elements))
+	failures := make(chan *exception.Error, len(elements))
+	for index, element := range elements {
+		go func() {
+			result, failure, failed := attempt(func() B { return f(element) })
+			results[index] = result
+			failures <- failedWith(failure, failed)
+		}()
+	}
+	awaitAll(failures, len(elements))
+	return results
+}
+
+// ForArrayConcurrentlyImpl runs f on every element on a goroutine of its own and waits for all
+// of them. The first exception any throws is rethrown here, without waiting for the others.
+func ForArrayConcurrentlyImpl[A any](elements []A, f func(A)) {
+	failures := make(chan *exception.Error, len(elements))
+	for _, element := range elements {
+		go func() {
+			_, failure, failed := attempt(func() struct{} {
+				f(element)
+				return struct{}{}
+			})
+			failures <- failedWith(failure, failed)
+		}()
+	}
+	awaitAll(failures, len(elements))
+}
+
+// awaitAll waits for count goroutines to report and panics with the first failure.
+func awaitAll(failures chan *exception.Error, count int) {
+	for range count {
+		if failure := <-failures; failure != nil {
+			panic(*failure)
+		}
+	}
+}
+
 // FirstImpl runs both effects on goroutines of their own and returns the outcome of the first to
 // finish.
 func FirstImpl[A any](left func() A, right func() A) A {

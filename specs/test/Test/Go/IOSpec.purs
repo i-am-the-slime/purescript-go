@@ -28,7 +28,7 @@ import Effect.Now (now)
 import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
 import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, threadDelay, throwIO, toAff, try)
-import Go.IO.Async (concurrently, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
+import Go.IO.Async (concurrently, concurrently_, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
 import Go.IO.Chan (newChan, readChan, writeList2Chan)
 import Go.IO.IORef (atomicModifyIORef', newIORef, readIORef, writeIORef)
 import Go.IO.MVar (modifyMVar_, newEmptyMVar, newMVar, putMVar, readMVar, takeMVar, withMVar)
@@ -140,6 +140,35 @@ spec = describe "Go.IO" do
     it "throws the first exception of its threads" do
       outcome <- toAff (try (mapConcurrently (\n -> if n == 3 then throwIO (error "three") else threadDelay (Milliseconds 500.0) $> n) (Array.range 1 5)))
       either message show outcome `shouldEqual` "three"
+
+    it "throws the first exception of forConcurrently_, without waiting for the others" do
+      started <- liftEffect now
+      outcome <- toAffAttempt (forConcurrently_ (Array.range 1 5) \n -> if n == 2 then throwIO (error "two") else threadDelay (Milliseconds 2000.0))
+      finished <- liftEffect now
+      outcome `shouldEqual` Left "two"
+      (diff finished started :: Milliseconds) `shouldSatisfy` (_ < Milliseconds 1000.0)
+
+    it "maps nothing over an empty array" do
+      results <- toAff (mapConcurrently (\n -> pure (n + 1)) [])
+      results `shouldEqual` ([] :: Array Int)
+
+    it "runs both sides of concurrently_ at the same time and waits for both" do
+      handshake <- toAff do
+        leftReady <- newEmptyMVar
+        rightReady <- newEmptyMVar
+        seen <- newIORef ""
+        concurrently_
+          (putMVar leftReady "left" *> takeMVar rightReady >>= writeIORef seen)
+          (putMVar rightReady "right" *> takeMVar leftReady)
+        readIORef seen
+      handshake `shouldEqual` "right"
+
+    it "throws as soon as one side of concurrently_ throws, without waiting for the other" do
+      started <- liftEffect now
+      outcome <- toAffAttempt (concurrently_ (threadDelay (Milliseconds 2000.0)) (throwIO (error "early") :: IO Unit))
+      finished <- liftEffect now
+      outcome `shouldEqual` Left "early"
+      (diff finished started :: Milliseconds) `shouldSatisfy` (_ < Milliseconds 1000.0)
 
     it "races, and returns the first to finish" do
       winner <- toAff (race (threadDelay (Milliseconds 300.0) $> 1) (pure "fast"))
