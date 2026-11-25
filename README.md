@@ -45,6 +45,12 @@ hello Mark
 
 Take what you need, each one brings along the ones it builds on.
 
+## Examples
+
+- [largest-files](examples/largest-files): the ten largest files under a directory, one goroutine
+  per directory, a typed channel, and a deadline that stops every one of them cleanly. Next to it,
+  the same program in plain Go.
+
 ## Installing
 
 You need Iris with the Go backend, Go 1.27 or later, and Spago:

@@ -2,3 +2,6 @@
 /output/
 /out/
 /out-parallel/
+/examples/*/.spago/
+/examples/*/output/
+/examples/*/spago.lock
