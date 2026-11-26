@@ -19,12 +19,12 @@ What it uses from `go-io`:
 
 ## Running it
 
-You need [Iris](https://github.com/i-am-the-slime/iris-go-backend) 0.1.18-go.2 or later and Go 1.27.
-The `spago.yaml` uses the Go package set, so there's nothing else to set up:
+You need [googoo](https://github.com/i-am-the-slime/iris-go-backend) 0.1.18-go.3 or later and Go
+1.27. The `spago.yaml` uses the Go package set, so there's nothing else to set up:
 
 ```bash
 cd examples/largest-files
-iris run --go -- /usr
+googoo run --go -- /usr
 ```
 
 Without an argument it looks at the current directory.
@@ -34,7 +34,7 @@ Without an argument it looks at the current directory.
 A tree it can walk in time (0.23 seconds, on 18 cores):
 
 ```
-$ iris run --go -- /usr
+$ googoo run --go -- /usr
 The largest of 31480 files under /usr:
   421.2 MB  /usr/local/bin/vault
    71.8 MB  /usr/share/tokenizer/ja/matrix.bin
@@ -52,7 +52,7 @@ That's the whole tree.
 And one it can't:
 
 ```
-$ iris run --go -- /Applications
+$ googoo run --go -- /Applications
 The largest of 215820 files under /Applications:
     1.3 GB  /Applications/Affinity.app/Contents/Frameworks/liblibpersona.dylib
   731.9 MB  /Applications/godotjs/godot.macos.template_release.arm64.dSYM/Contents/Resources/DWARF/godot.macos.template_release.arm64
@@ -129,3 +129,9 @@ walk scan directory = unlessM (isCancelled scan.context) do
 
 `mapConcurrently_` waits for the subdirectories itself, so there's no counter to keep right, and
 `bracket_` gives the slot back whatever happens.
+
+## The Go googoo writes
+
+`googoo go out` puts the Go for this program in `out/`. With 0.1.18-go.3 it got a little tidier
+than with 0.1.18-go.2: function names are 12.6 characters on average instead of 13.9, and the
+longest is 24 instead of 31. It still has the same 2 `switch either`s, this program hardly fails.

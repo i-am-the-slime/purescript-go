@@ -26,7 +26,7 @@ main = launchAff_ do
 ```
 
 ```
-$ iris run --go
+$ googoo run --go
 listening on :8080
 $ curl 'localhost:8080/?name=Mark'
 hello Mark
@@ -53,10 +53,11 @@ Take what you need, each one brings along the ones it builds on.
 
 ## Installing
 
-You need Iris with the Go backend, Go 1.27 or later, and Spago:
+You need [googoo](https://github.com/i-am-the-slime/iris-go-backend), the PureScript compiler with
+a Go backend, Go 1.27 or later, and Spago:
 
 ```bash
-brew install spago i-am-the-slime/tap/iris
+brew install spago i-am-the-slime/tap/googoo
 ```
 
 The packages aren't in the registry yet, so add them to your `spago.yaml` straight from GitHub. Pick a
@@ -90,10 +91,10 @@ workspace:
 
 `go-os` and `go-http` need `go-bytes`, everything needs `go-io`.
 
-Then run your program with `iris run --go`, or build it with `iris go`, which prints where it put the
-binary.
+Then run your program with `googoo run --go`, or build it with `googoo go`, which prints where it put
+the binary.
 
-There are no `.js` files: this only works with Iris's Go backend. `spago build` will complain about
+There are no `.js` files: this only works with googoo's Go backend. `spago build` will complain about
 missing foreign modules.
 
 ## go-io
@@ -214,12 +215,12 @@ goes first; `trySelect1` and `trySelect2` take a default that runs when none can
 
 An `Effect.Ref` isn't safe between parallel `IO` threads. Two threads that `modify` the same `Ref`
 at once can lose an update. Use an `MVar` (`modifyMVar_`, `withMVar`) or an `IORef` with
-`atomicModifyIORef'` instead: those are atomic, however many threads hit them. Iris's
+`atomicModifyIORef'` instead: those are atomic, however many threads hit them. googoo's
 [Effect, Aff and IO](https://github.com/i-am-the-slime/iris-go-backend/blob/main/documentation/go/effects.md)
 guide has the details.
 
 Writing Go for a foreign import that takes an `IORef`? On the Go side it's a pointer with
-`.Load()`, `.Store(value)` and `.Modify(f)`, and `New(value)` makes one. Iris calls these methods
+`.Load()`, `.Store(value)` and `.Modify(f)`, and `New(value)` makes one. googoo calls these methods
 directly for `readIORef`, `writeIORef` and `newIORef`, so your Go and the compiled PureScript read
 the same way.
 
