@@ -49,7 +49,7 @@ func ReadFileBytesImpl[R any](failed func(error) R, read func([]byte) R, path st
 	return read(data)
 }
 
-func WriteFileBytesImpl[R any](failed func(error) R, done R, path string, mode int32, contents []byte) R {
+func WriteFileBytesImpl[R any](failed func(error) R, done R, path string, mode int, contents []byte) R {
 	return result(failed, done, os.WriteFile(path, contents, fs.FileMode(mode)))
 }
 
@@ -70,7 +70,7 @@ func ExecutableImpl[R any](failed func(error) R, found func(string) R) R {
 	return found(path)
 }
 
-func WriteFileImpl[R any](failed func(error) R, done R, path string, mode int32, contents string) R {
+func WriteFileImpl[R any](failed func(error) R, done R, path string, mode int, contents string) R {
 	return result(failed, done, os.WriteFile(path, []byte(contents), fs.FileMode(mode)))
 }
 
@@ -169,7 +169,7 @@ func ReadlinkImpl[R any](failed func(error) R, found func(string) R, path string
 	return found(target)
 }
 
-func ChmodImpl[R any](failed func(error) R, done R, path string, mode int32) R {
+func ChmodImpl[R any](failed func(error) R, done R, path string, mode int) R {
 	return result(failed, done, os.Chmod(path, fs.FileMode(mode)))
 }
 
@@ -213,7 +213,7 @@ func SetenvImpl(name string, value string) { os.Setenv(name, value) }
 
 func UnsetenvImpl(name string) { os.Unsetenv(name) }
 
-func ExitImpl(code int32) { os.Exit(int(code)) }
+func ExitImpl(code int) { os.Exit(code) }
 
 func NameImpl(info fs.FileInfo) string { return info.Name() }
 
@@ -222,7 +222,7 @@ func SizeImpl(info fs.FileInfo) float64 { return float64(info.Size()) }
 func IsDirImpl(info fs.FileInfo) bool { return info.IsDir() }
 
 // Permission bits are nine bits wide, so they fit an Int.
-func ModeImpl(info fs.FileInfo) int32 { return int32(info.Mode().Perm()) }
+func ModeImpl(info fs.FileInfo) int { return int(info.Mode().Perm()) }
 
 func ModTimeImpl(info fs.FileInfo) float64 { return float64(info.ModTime().UnixMilli()) }
 

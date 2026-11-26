@@ -16,7 +16,7 @@ import (
 type Output struct {
 	Stdout   string
 	Stderr   string
-	ExitCode int32
+	ExitCode int
 	Signal   string
 }
 
@@ -42,7 +42,7 @@ type running struct {
 	stdout  bytes.Buffer
 	stderr  bytes.Buffer
 	done    chan struct{}
-	code    int32
+	code    int
 	err     error
 }
 
@@ -149,7 +149,7 @@ func (process *running) output() Output {
 func RunInteractiveImpl[R any](
 	notFound func(string) R,
 	failed func(error) R,
-	finished func(int32) R,
+	finished func(int) R,
 	prepared Prepared,
 ) R {
 	command := start(prepared)
@@ -179,12 +179,12 @@ func start(prepared Prepared) *exec.Cmd {
 }
 
 // exitCode is the exit code of a program that ran to its end, and the error of one that did not.
-// A Unix exit code fits a byte. A Windows one above 2^31-1, such as an NTSTATUS crash code, reads
-// as the negative Int with the same 32 bits.
-func exitCode(err error) (int32, error) {
+// A Unix exit code fits a byte. A Windows one, such as an NTSTATUS crash code, can pass 2^31-1
+// and is that positive Int, as Go reports it.
+func exitCode(err error) (int, error) {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {
-		return int32(exitError.ExitCode()), nil
+		return exitError.ExitCode(), nil
 	}
 	return 0, err
 }

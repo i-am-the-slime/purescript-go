@@ -19,7 +19,7 @@ What it uses from `go-io`:
 
 ## Running it
 
-You need [googoo](https://github.com/i-am-the-slime/iris-go-backend) 0.1.18-go.3 or later and Go
+You need [googoo](https://github.com/i-am-the-slime/iris-go-backend) 0.1.18-go.5 or later and Go
 1.27. The `spago.yaml` uses the Go package set, so there's nothing else to set up:
 
 ```bash

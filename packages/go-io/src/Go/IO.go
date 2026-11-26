@@ -17,7 +17,7 @@ var threads atomic.Int32
 
 // ForkIOImpl runs the action on a new goroutine. An exception it doesn't catch goes to standard
 // error, as GHC reports one, and ends only that goroutine.
-func ForkIOImpl(action func()) int32 {
+func ForkIOImpl(action func()) int {
 	id := threads.Add(1)
 	go func() {
 		_, failure, failed := attempt(func() struct{} {
@@ -28,7 +28,7 @@ func ForkIOImpl(action func()) int32 {
 			os.Stderr.WriteString(filepath.Base(os.Args[0]) + ": thread " + strconv.Itoa(int(id)) + ": " + exception.ShowErrorImpl(failure) + "\n")
 		}
 	}()
-	return id
+	return int(id)
 }
 
 func ThreadDelayImpl(milliseconds float64) {
@@ -53,7 +53,7 @@ func ThreadDelayWithImpl(ctx context.Context, milliseconds float64) bool {
 
 func YieldImpl() { runtime.Gosched() }
 
-func NumCapabilitiesImpl() int32 { return int32(runtime.GOMAXPROCS(0)) }
+func NumCapabilitiesImpl() int { return runtime.GOMAXPROCS(0) }
 
 // ToAffImpl is LaunchIOImpl, for toAff to resume a fiber with.
 func ToAffImpl[A any](action func() A, succeeded func(A), failed func(exception.Error)) {

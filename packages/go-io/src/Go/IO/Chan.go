@@ -8,7 +8,7 @@ type ReceiveChan[A any] = <-chan A
 
 func NewChanImpl[A any]() chan A { return make(chan A) }
 
-func NewBufferedChanImpl[A any](capacity int32) chan A { return make(chan A, capacity) }
+func NewBufferedChanImpl[A any](capacity int) chan A { return make(chan A, capacity) }
 
 func ReceiveEndImpl[A any](channel chan A) <-chan A { return channel }
 
@@ -45,6 +45,6 @@ func TryReceiveImpl[A, R any](empty R, closed R, received func(A) R, channel <-c
 	}
 }
 
-func CapacityImpl[A any](channel <-chan A) int32 { return int32(cap(channel)) }
+func CapacityImpl[A any](channel <-chan A) int { return cap(channel) }
 
-func LengthImpl[A any](channel <-chan A) int32 { return int32(len(channel)) }
+func LengthImpl[A any](channel <-chan A) int { return len(channel) }

@@ -73,19 +73,19 @@ workspace:
   extraPackages:
     go-io:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.2.0
+      ref: v0.3.0
       subdir: packages/go-io
     go-bytes:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.2.0
+      ref: v0.3.0
       subdir: packages/go-bytes
     go-os:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.2.0
+      ref: v0.3.0
       subdir: packages/go-os
     go-exec:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.2.0
+      ref: v0.3.0
       subdir: packages/go-exec
 ```
 

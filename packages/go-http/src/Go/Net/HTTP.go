@@ -17,7 +17,7 @@ type Request = *http.Request
 
 // ResponseType is what a handler answers with. Adding a header copies it.
 type ResponseType struct {
-	status int32
+	status int
 	header http.Header
 	body   []byte
 }
@@ -30,7 +30,7 @@ type Server struct {
 }
 
 type ClientResponse struct {
-	status int32
+	status int
 	header http.Header
 	body   []byte
 	url    string
@@ -109,11 +109,11 @@ func BodyBytesImpl[R any](failed func(error) R, read func([]byte) R, request *ht
 	return read(data)
 }
 
-func ResponseImpl(status int32, body string) ResponseType {
+func ResponseImpl(status int, body string) ResponseType {
 	return ResponseType{status: status, header: http.Header{}, body: []byte(body)}
 }
 
-func ResponseBytesImpl(status int32, body []byte) ResponseType {
+func ResponseBytesImpl(status int, body []byte) ResponseType {
 	return ResponseType{status: status, header: http.Header{}, body: body}
 }
 
@@ -167,10 +167,10 @@ func exchange(outgoing ClientRequest) (ClientResponse, error) {
 	if err != nil {
 		return ClientResponse{}, err
 	}
-	return ClientResponse{status: int32(answer.StatusCode), header: answer.Header, body: data, url: answer.Request.URL.String()}, nil
+	return ClientResponse{status: answer.StatusCode, header: answer.Header, body: data, url: answer.Request.URL.String()}, nil
 }
 
-func StatusImpl(response ClientResponse) int32 { return response.status }
+func StatusImpl(response ClientResponse) int { return response.status }
 
 func ResponseHeaderImpl[R any](missing R, found func(string) R, name string, response ClientResponse) R {
 	values := response.header.Values(name)
@@ -213,7 +213,7 @@ func serve(handler func(*http.Request) func(func(ResponseType))) http.Handler {
 				writer.Header().Add(name, value)
 			}
 		}
-		writer.WriteHeader(int(response.status))
+		writer.WriteHeader(response.status)
 		writer.Write(response.body)
 	})
 }
