@@ -24,6 +24,16 @@ func CatchImpl[A any](handler func(exception.Error) A, action func() A) A {
 	return result
 }
 
+// CatchResultsImpl is CatchImpl for an action that returns its result as a value and a failure,
+// as Iris passes an Either. Iris calls it in place of CatchImpl at such actions.
+func CatchResultsImpl[A, F any](handler func(exception.Error) (A, F), action func() (A, F)) (A, F) {
+	value, err, failure, failed := attemptResults(action)
+	if failed {
+		return handler(failure)
+	}
+	return value, err
+}
+
 // BothImpl runs both effects on goroutines of their own and combines their results. The first
 // exception either throws is rethrown here, without waiting for the other.
 func BothImpl[A, B, C any](combine func(A) func(B) C, left func() A, right func() B) C {
@@ -150,6 +160,12 @@ func failedWith(failure exception.Error, failed bool) *exception.Error {
 func attempt[A any](action func() A) (result A, failure exception.Error, failed bool) {
 	defer recoverInto(&failure, &failed)
 	return action(), exception.Error{}, false
+}
+
+func attemptResults[A, F any](action func() (A, F)) (value A, err F, failure exception.Error, failed bool) {
+	defer recoverInto(&failure, &failed)
+	value, err = action()
+	return value, err, exception.Error{}, false
 }
 
 // recoverInto, deferred, turns a panic into the failure. It never sees the action's result, so
