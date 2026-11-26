@@ -132,6 +132,8 @@ walk scan directory = unlessM (isCancelled scan.context) do
 
 ## The Go googoo writes
 
-`googoo go out` puts the Go for this program in `out/`. With 0.1.18-go.3 it got a little tidier
-than with 0.1.18-go.2: function names are 12.6 characters on average instead of 13.9, and the
-longest is 24 instead of 31. It still has the same 2 `switch either`s, this program hardly fails.
+`googoo go out` puts the Go for this program in `out/`. With 0.1.18-go.5 that's 288 lines in `main.go`,
+plus a few small files for `Maybe`, `Tuple` and the `Go.OS` types. Function names are 13 characters
+on average and the longest is `RightEitherArrayDirEntry`. The file count is a plain Go `int` now, so
+printing it is just `strconv.Itoa`. There are 2 `switch either`s, this program hardly
+fails.
