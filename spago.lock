@@ -98,6 +98,25 @@
           "dependencies": []
         }
       },
+      "go-spec": {
+        "path": "packages/go-spec",
+        "core": {
+          "dependencies": [
+            "aff",
+            "console",
+            "effect",
+            "either",
+            "go-os",
+            "identity",
+            "newtype",
+            "prelude",
+            "spec"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
       "go-specs": {
         "path": "specs",
         "core": {
@@ -119,6 +138,7 @@
             "go-http",
             "go-io",
             "go-os",
+            "go-spec",
             "go-time",
             "identity",
             "integers",

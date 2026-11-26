@@ -2,13 +2,7 @@ module Test.Main where
 
 import Prelude
 
-import Data.Identity (Identity(..))
-import Data.Newtype (un)
 import Effect (Effect)
-import Effect.Aff (launchAff_)
-import Effect.Class (liftEffect)
-import Go.OS (ExitCode(..))
-import Go.OS as OS
 import Test.Go.BytesSpec as BytesSpec
 import Test.Go.IO.ChannelSpec as ChannelSpec
 import Test.Go.IOSpec as IOSpec
@@ -20,18 +14,16 @@ import Test.Go.Path.FilepathSpec as FilepathSpec
 import Test.Go.TimeSpec as TimeSpec
 import Test.Spec (Spec)
 import Test.Spec.Reporter.Console (consoleReporter)
-import Test.Spec.Runner (defaultConfig, evalSpecT)
-import Test.Spec.Summary (successful)
+import Test.Spec.Runner.Go (runSpecAndExitProcess)
+import Test.Spec.Runner.GoSpec as RunnerSpec
 
 -- | Runs the specs, unless the specs started this binary as a child to pipe into.
 main :: Effect Unit
 main = do
-  isStdioChild <- StdioSpec.child
-  isIOChild <- if isStdioChild then pure true else IOSpec.child
-  unless isIOChild do
-    launchAff_ do
-      results <- un Identity (evalSpecT (defaultConfig { exit = false }) [ consoleReporter ] specs)
-      unless (successful results) (liftEffect (OS.exit (ExitCode 1)))
+  isChild <- StdioSpec.child `orElse` IOSpec.child `orElse` RunnerSpec.child
+  unless isChild (runSpecAndExitProcess [ consoleReporter ] specs)
+  where
+  orElse first second = first >>= if _ then pure true else second
 
 specs :: Spec Unit
 specs = do
@@ -44,3 +36,4 @@ specs = do
   HTTPSpec.spec
   IOSpec.spec
   ChannelSpec.spec
+  RunnerSpec.spec

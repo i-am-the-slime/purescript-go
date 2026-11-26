@@ -42,6 +42,7 @@ hello Mark
 | `go-http` | `Go.Net.HTTP` | a server and a client |
 | `go-time` | `Go.Time` | Go's time layouts, sleep |
 | `go-bytes` | `Go.Bytes` | `[]byte`, for files and bodies that aren't text |
+| `go-spec` | `Test.Spec.Runner.Go` | run purescript-spec specs and exit with their result |
 
 Take what you need, each one brings along the ones it builds on.
 
@@ -73,19 +74,19 @@ workspace:
   extraPackages:
     go-io:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.3.0
+      ref: v0.4.0
       subdir: packages/go-io
     go-bytes:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.3.0
+      ref: v0.4.0
       subdir: packages/go-bytes
     go-os:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.3.0
+      ref: v0.4.0
       subdir: packages/go-os
     go-exec:
       git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.3.0
+      ref: v0.4.0
       subdir: packages/go-exec
 ```
 
@@ -468,6 +469,46 @@ Welt
 
 Sizes are `ByteCount`s, a `Number`, since files can be bigger than an `Int`. `Bytes` never change:
 everything that makes bytes makes new ones.
+
+## go-spec
+
+spec-node's `runSpecAndExitProcess`, for Go. Make it your test main:
+
+```purescript
+module Test.Main where
+
+import Prelude
+
+import Effect (Effect)
+import Test.Spec (describe, it)
+import Test.Spec.Assertions (shouldEqual)
+import Test.Spec.Reporter.Console (consoleReporter)
+import Test.Spec.Runner.Go (runSpecAndExitProcess)
+
+main :: Effect Unit
+main = runSpecAndExitProcess [ consoleReporter ] do
+  describe "addition" do
+    it "adds" do
+      (1 + 1) `shouldEqual` 2
+```
+
+```
+$ googoo run --go -p my-tests --entry Test.Main.main
+addition
+  ✓︎ adds
+
+Summary
+1/1 test passed
+
+$ echo $?
+0
+```
+
+The program exits with 0 when every spec passed and 1 when one failed. spec's own `runSpec` would
+work too, but it prints a warning about Node.js first. `runSpecAndExitProcess'` takes a `Config`
+for timeouts, `failFast` and filtering; its `exit` doesn't matter, it always exits.
+
+It needs `go-os`, so list `go-spec`, `go-os`, `go-bytes` and `go-io` in `extraPackages`.
 
 ## Testing
 

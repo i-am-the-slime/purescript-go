@@ -1,0 +1,20 @@
+package:
+  name: go-spec
+  description: Run purescript-spec specs in a program compiled to Go with Iris, and exit with their result
+  dependencies:
+    - aff
+    - console
+    - effect
+    - either
+    - go-os
+    - identity
+    - newtype
+    - prelude
+    - spec
+  publish:
+    version: 0.1.0
+    license: MIT
+    location:
+      githubOwner: i-am-the-slime
+      githubRepo: purescript-go
+      subdir: packages/go-spec
