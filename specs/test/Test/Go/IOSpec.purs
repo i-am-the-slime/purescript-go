@@ -27,7 +27,7 @@ import Effect.Exception (error, message, throw)
 import Effect.Now (now)
 import Effect.Ref as Ref
 import Go.FilePath (FilePath(..))
-import Go.IO (IO, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, threadDelay, throwIO, toAff, try)
+import Go.IO (IO, bracket, catch, evaluate, forkIO, getNumCapabilities, launchIO, launchIO_, threadDelay, throwIO, toAff, try)
 import Go.IO.Async (concurrently, concurrently_, forConcurrently, forConcurrently_, mapConcurrently, mapConcurrently_, race, replicateConcurrently)
 import Go.IO.Chan (newChan, receive, sendAll)
 import Go.IO.IORef (atomicModifyIORef', modifyIORef, newIORef, readIORef, writeIORef)
@@ -231,6 +231,14 @@ spec = describe "Go.IO" do
       outcome <- toAff (try (pure unit >>= \_ -> evaluate (unsafePartial (ArrayPartial.head ([] :: Array Int)))))
       isLeft outcome `shouldEqual` true
 
+    it "keeps the use's exception when the release of a bracket throws as well" do
+      outcome <- toAffAttempt (bracket (pure unit) (\_ -> failWith "release failed") (\_ -> failWith "use failed"))
+      outcome `shouldEqual` Left "use failed"
+
+    it "throws the release's exception when only the release throws" do
+      outcome <- toAffAttempt (bracket (pure unit) (\_ -> failWith "release failed") (\_ -> pure unit))
+      outcome `shouldEqual` Left "release failed"
+
     it "turns an exception into the fiber's error in toAff" do
       outcome <- toAffAttempt (throwIO (error "in IO") :: IO Unit)
       outcome `shouldEqual` Left "in IO"
@@ -356,6 +364,9 @@ launched action = makeAff \resolve -> launchIO action (resolve <<< Right <<< eit
 
 toAffAttempt :: forall a. IO a -> Aff (Either String a)
 toAffAttempt action = toAff (try action) <#> either (Left <<< message) Right
+
+failWith :: String -> IO Unit
+failWith = throwIO <<< error
 
 childMode :: EnvName
 childMode = EnvName "GO_IO_SPEC_CHILD"

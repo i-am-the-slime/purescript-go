@@ -140,6 +140,9 @@ finally action finalizer = do
   _ <- finalizer
   pure result
 
--- | Runs the handler when the action throws, and rethrows.
+-- | Runs the handler when the action throws, and rethrows the action's exception, also when
+-- | the handler throws one of its own.
 onException :: forall a b. IO a -> IO b -> IO a
-onException action handler = catch action \error -> handler *> throwIO error
+onException action handler = catch action \error -> handlerIgnoringItsException *> throwIO error
+  where
+  handlerIgnoringItsException = void (try handler)
