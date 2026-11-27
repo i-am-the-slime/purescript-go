@@ -1,0 +1,15 @@
+package:
+  name: go-map
+  description: Go's built-in map as a mutable hash map in Effect, for PureScript compiled to Go with googoo
+  dependencies:
+    - effect
+    - maybe
+    - prelude
+    - tuples
+  publish:
+    version: 0.1.0
+    license: MIT
+    location:
+      githubOwner: i-am-the-slime
+      githubRepo: purescript-go
+      subdir: packages/go-map

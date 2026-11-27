@@ -77,6 +77,20 @@
           "dependencies": []
         }
       },
+      "go-map": {
+        "path": "packages/go-map",
+        "core": {
+          "dependencies": [
+            "effect",
+            "maybe",
+            "prelude",
+            "tuples"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
       "go-os": {
         "path": "packages/go-os",
         "core": {
@@ -137,6 +151,7 @@
             "go-exec",
             "go-http",
             "go-io",
+            "go-map",
             "go-os",
             "go-spec",
             "go-time",

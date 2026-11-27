@@ -9,6 +9,7 @@ import Test.Go.IOSpec as IOSpec
 import Test.Go.Net.HTTPSpec as HTTPSpec
 import Test.Go.OS.ExecSpec as ExecSpec
 import Test.Go.OS.StdioSpec as StdioSpec
+import Test.Go.MapSpec as MapSpec
 import Test.Go.OSSpec as OSSpec
 import Test.Go.Path.FilepathSpec as FilepathSpec
 import Test.Go.TimeSpec as TimeSpec
@@ -36,4 +37,5 @@ specs = do
   HTTPSpec.spec
   IOSpec.spec
   ChannelSpec.spec
+  MapSpec.spec
   RunnerSpec.spec
