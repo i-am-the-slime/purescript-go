@@ -1,6 +1,6 @@
 # purescript-go
 
-Go's standard library for PureScript. Compile with [Iris](https://github.com/i-am-the-slime/iris-go-backend)
+Go's standard library for PureScript. Compile with [googoo](https://github.com/i-am-the-slime/iris-go-backend)
 and you get a single native binary that reads files, runs programs, serves HTTP and uses every core
 you've got.
 
@@ -42,6 +42,7 @@ hello Mark
 | `go-http` | `Go.Net.HTTP` | a server and a client |
 | `go-time` | `Go.Time` | Go's time layouts, sleep |
 | `go-bytes` | `Go.Bytes` | `[]byte`, for files and bodies that aren't text |
+| `go-map` | `Go.Map` | Go's built-in map, read and written in `Effect` like a `Ref` |
 | `go-spec` | `Test.Spec.Runner.Go` | run purescript-spec specs and exit with their result |
 
 Take what you need, each one brings along the ones it builds on.
@@ -61,42 +62,28 @@ a Go backend, Go 1.27 or later, and Spago:
 brew install spago i-am-the-slime/tap/googoo
 ```
 
-The packages aren't in the registry yet, so add them to your `spago.yaml` straight from GitHub. Pick a
-tag and list every package you use, and the ones they use:
+The packages are in the [Go package set](https://github.com/rowtype-yoga/purescript-go-package-sets).
+Point your `spago.yaml` at it and list the ones you use:
 
 ```yaml
 package:
+  name: my-app
   dependencies:
+    - effect
     - go-exec
     - go-io
     - go-os
+    - prelude
 workspace:
-  extraPackages:
-    go-io:
-      git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.4.0
-      subdir: packages/go-io
-    go-bytes:
-      git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.4.0
-      subdir: packages/go-bytes
-    go-os:
-      git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.4.0
-      subdir: packages/go-os
-    go-exec:
-      git: https://github.com/i-am-the-slime/purescript-go.git
-      ref: v0.4.0
-      subdir: packages/go-exec
+  packageSet:
+    url: https://raw.githubusercontent.com/rowtype-yoga/purescript-go-package-sets/go-0.1.18-20261127/packages.json
 ```
 
-`go-os` and `go-http` need `go-bytes`, everything needs `go-io`.
-
 Then run your program with `googoo run`, or build it with `googoo go`, which prints where it put
-the binary.
+the binary. `googoo add go-time` adds another one.
 
-There are no `.js` files: this only works with googoo's Go backend. `spago build` will complain about
-missing foreign modules.
+There are no `.js` files: this only works with googoo's Go backend. `googoo build`, `googoo test`
+and `spago build` go the JavaScript way and complain about missing foreign modules.
 
 ## go-io
 
@@ -470,6 +457,43 @@ Welt
 Sizes are `ByteCount`s, a `Number`, since files can be bigger than an `Int`. `Bytes` never change:
 everything that makes bytes makes new ones.
 
+## go-map
+
+```purescript
+module Main where
+
+import Prelude
+
+import Data.Foldable (for_)
+import Data.Maybe (Maybe(..), maybe)
+import Effect (Effect)
+import Effect.Console (logShow)
+import Go.Map as GoMap
+
+main :: Effect Unit
+main = do
+  counts <- GoMap.new
+  for_ [ "to", "be", "or", "not", "to", "be" ] \word ->
+    GoMap.alter (Just <<< maybe 1 (_ + 1)) word counts
+  GoMap.size counts >>= logShow
+  GoMap.lookup "to" counts >>= logShow
+  GoMap.entries counts >>= logShow
+```
+
+```
+4
+(Just 2)
+[(Tuple "be" 2),(Tuple "not" 1),(Tuple "or" 1),(Tuple "to" 2)]
+```
+
+A `GoMap` is Go's `map[K]V`: you change it in place, in `Effect`, like a `Ref`. Keys are `Int`,
+`String`, `Char` or `Number`. Go visits a map in random order, so `entries`, `keys` and `values`
+sort by key.
+
+Reach for it when a map lives on and keeps changing, say a cache your program updates all the time.
+A `Data.Map` that only one loop builds already becomes a Go map when googoo compiles it, so start
+with that.
+
 ## go-spec
 
 spec-node's `runSpecAndExitProcess`, for Go. Make it your test main:
@@ -493,7 +517,7 @@ main = runSpecAndExitProcess [ consoleReporter ] do
 ```
 
 ```
-$ googoo run -p my-tests --entry Test.Main.main
+$ googoo run --main Test.Main
 addition
   ✓︎ adds
 
@@ -508,7 +532,15 @@ The program exits with 0 when every spec passed and 1 when one failed. spec's ow
 work too, but it prints a warning about Node.js first. `runSpecAndExitProcess'` takes a `Config`
 for timeouts, `failFast` and filtering; its `exit` doesn't matter, it always exits.
 
-It needs `go-os`, so list `go-spec`, `go-os`, `go-bytes` and `go-io` in `extraPackages`.
+List `go-spec` and `spec` as your test dependencies:
+
+```yaml
+  test:
+    main: Test.Main
+    dependencies:
+      - go-spec
+      - spec
+```
 
 ## Testing
 
@@ -516,5 +548,5 @@ It needs `go-os`, so list `go-spec`, `go-os`, `go-bytes` and `go-io` in `extraPa
 ./test.sh
 ```
 
-compiles the specs of every package with Iris and runs them. Set `IRIS_GO` to a local iris-go
+compiles the specs of every package with googoo and runs them. Set `IRIS_GO` to a local iris-go
 checkout to build against that.
