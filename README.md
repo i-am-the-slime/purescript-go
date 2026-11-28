@@ -26,7 +26,7 @@ main = launchAff_ do
 ```
 
 ```
-$ googoo run --go
+$ googoo run
 listening on :8080
 $ curl 'localhost:8080/?name=Mark'
 hello Mark
@@ -92,7 +92,7 @@ workspace:
 
 `go-os` and `go-http` need `go-bytes`, everything needs `go-io`.
 
-Then run your program with `googoo run --go`, or build it with `googoo go`, which prints where it put
+Then run your program with `googoo run`, or build it with `googoo go`, which prints where it put
 the binary.
 
 There are no `.js` files: this only works with googoo's Go backend. `spago build` will complain about
@@ -493,7 +493,7 @@ main = runSpecAndExitProcess [ consoleReporter ] do
 ```
 
 ```
-$ googoo run --go -p my-tests --entry Test.Main.main
+$ googoo run -p my-tests --entry Test.Main.main
 addition
   ✓︎ adds
 

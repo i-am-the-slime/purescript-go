@@ -24,7 +24,7 @@ You need [googoo](https://github.com/i-am-the-slime/iris-go-backend) 0.1.18-go.5
 
 ```bash
 cd examples/largest-files
-googoo run --go -- /usr
+googoo run -- /usr
 ```
 
 Without an argument it looks at the current directory.
@@ -34,7 +34,7 @@ Without an argument it looks at the current directory.
 A tree it can walk in time (0.23 seconds, on 18 cores):
 
 ```
-$ googoo run --go -- /usr
+$ googoo run -- /usr
 The largest of 31480 files under /usr:
   421.2 MB  /usr/local/bin/vault
    71.8 MB  /usr/share/tokenizer/ja/matrix.bin
@@ -52,7 +52,7 @@ That's the whole tree.
 And one it can't:
 
 ```
-$ googoo run --go -- /Applications
+$ googoo run -- /Applications
 The largest of 215820 files under /Applications:
     1.3 GB  /Applications/Affinity.app/Contents/Frameworks/liblibpersona.dylib
   731.9 MB  /Applications/godotjs/godot.macos.template_release.arm64.dSYM/Contents/Resources/DWARF/godot.macos.template_release.arm64
